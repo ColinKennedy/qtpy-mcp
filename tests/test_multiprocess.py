@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import io
 import os
+import re
 import subprocess
 import sys
 import time
@@ -263,7 +264,12 @@ def test_gif_recording_from_the_chosen_process(fleet: list[App]) -> None:
     assert block.mime_type == "image/gif"
     gif = read_gif(base64.b64decode(block.data))
     assert gif.is_animated
-    assert gif.n_frames >= 3
+    # Pillow merges identical neighbouring frames, so judge capture by the reported count
+    # and the GIF by its distinct frames.
+    recorded = re.search(r"(\d+) frame\(s\)", _text(result))
+    assert recorded is not None
+    assert int(recorded.group(1)) >= 3
+    assert gif.n_frames >= 2
     assert len(set(gif.frames)) >= 2  # the dock really changed colour while recording
     first = Image.frombytes("RGB", gif.size, gif.frames[0])
     assert _is_app_colour(first, target)
