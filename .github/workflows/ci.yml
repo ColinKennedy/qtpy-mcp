@@ -23,7 +23,7 @@ jobs:
     name: Lint & types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -45,7 +45,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -78,7 +78,7 @@ jobs:
     env:
       QT_PREFERRED_BINDING: ${{ matrix.binding == 'pyside6' && 'PySide6' || matrix.binding == 'pyqt6' && 'PyQt6' || matrix.binding == 'pyqt5' && 'PyQt5' || 'PySide2' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: System libraries for Qt
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $QT_APT_PACKAGES
@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true  # depends on the Blender download; informational
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 xvfb
       - name: Install Blender
@@ -115,7 +115,7 @@ jobs:
     name: Build & check distributions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
       - name: Build sdist and wheel
         run: uv build
