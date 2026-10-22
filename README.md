@@ -60,7 +60,8 @@ MCP client config:
 
 ```python
 from qtpy_mcp.probe import install
-install(name="houdini")     # after the QApplication exists
+
+install(name="houdini")  # after the QApplication exists
 ```
 
 or set `QTPY_MCP_PROBE=1` in the environment before launching (no code change).
