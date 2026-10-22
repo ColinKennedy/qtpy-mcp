@@ -6,21 +6,27 @@ import asyncio
 import json
 from typing import Any
 
-DEFAULT_PROBE_PORT = 9142
+from mcp.server.mcpserver.exceptions import ToolError
+
 SCREENSHOT_STREAM_LIMIT_BYTES = 16 * 1024 * 1024
 DEFAULT_RESPONSE_TIMEOUT_SECONDS = 30.0
 
 
-class ProbeConnectionError(Exception):
-    """Raised when connection to the probe fails."""
+class ProbeConnectionError(ToolError):
+    """Raised when connection to the probe fails (message is shown to the model)."""
+
+
+class ProbeError(ToolError, ValueError):
+    """The probe reported an error (message is shown to the model)."""
 
 
 class ProbeClient:
     """Connects to the probe's JSON-RPC TCP server and sends requests."""
 
-    def __init__(self, host: str = "localhost", port: int = DEFAULT_PROBE_PORT) -> None:
+    def __init__(self, host: str = "127.0.0.1", port: int = 0, token: str = "") -> None:
         self._host = host
         self._port = port
+        self._token = token
         self._reader = None
         self._writer = None
         self._request_id = 0
@@ -48,6 +54,10 @@ class ProbeClient:
         )
 
     @property
+    def port(self) -> int:
+        return self._port
+
+    @property
     def connected(self) -> bool:
         return self._writer is not None and not self._writer.is_closing()
 
@@ -64,6 +74,8 @@ class ProbeClient:
                 "params": params or {},
                 "id": self._request_id,
             }
+            if self._token:
+                req["token"] = self._token
 
             if self._writer is None or self._reader is None:
                 raise ProbeConnectionError("Not connected to probe")
@@ -81,7 +93,7 @@ class ProbeClient:
             resp = json.loads(line)
             if "error" in resp:
                 err = resp["error"]
-                raise ValueError(f"Probe error: {err.get('message', err)}")
+                raise ProbeError(f"Probe error: {err.get('message', err)}")
             return resp.get("result")
 
     async def close(self) -> None:

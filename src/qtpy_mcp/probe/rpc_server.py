@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from collections.abc import Callable
 from typing import Any
@@ -17,6 +18,7 @@ ERROR_METHOD_NOT_FOUND = -32601
 ERROR_INVALID_REQUEST = -32600
 ERROR_INVALID_PARAMS = -32602
 ERROR_INTERNAL = -32000
+ERROR_UNAUTHORIZED = -32001
 
 
 def _pop_line(buffer: bytes) -> tuple[bytes | None, bytes]:
@@ -29,9 +31,15 @@ def _pop_line(buffer: bytes) -> tuple[bytes | None, bytes]:
 class JsonRpcServer(QObject):
     """JSON-RPC 2.0 server integrated with the Qt event loop via QTcpServer."""
 
-    def __init__(self, handler: Callable[[str, dict], Any], parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        handler: Callable[[str, dict], Any],
+        parent: QObject | None = None,
+        token: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self._handler = handler
+        self._token = token
         self._server = QTcpServer(self)
         self._server.newConnection.connect(self._on_connection)
         self._buffers: dict[Any, bytes] = {}
@@ -90,6 +98,17 @@ class JsonRpcServer(QObject):
         method = req.get("method", "")
         params = req.get("params", {})
         request_id = req.get("id")
+
+        if self._token and not hmac.compare_digest(str(req.get("token", "")), self._token):
+            self._write_response(
+                sock,
+                {
+                    "jsonrpc": "2.0",
+                    "error": {"code": ERROR_UNAUTHORIZED, "message": "unauthorized"},
+                    "id": request_id,
+                },
+            )
+            return
 
         if params is None:
             params = {}

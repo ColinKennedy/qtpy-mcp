@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
-
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ImageContent, TextContent
 
-from qtpy_mcp.server.probe_client import DEFAULT_PROBE_PORT, ProbeClient
+from qtpy_mcp.server.instances import InstanceManager
+from qtpy_mcp.server.probe_client import ProbeClient
 
 DEFAULT_SNAPSHOT_DEPTH = 10
 DEFAULT_SCREENSHOT_MAX_WIDTH = 1920
@@ -16,9 +16,6 @@ DEFAULT_SCREENSHOT_FORMAT = "png"
 DEFAULT_JPEG_QUALITY = 80
 DEFAULT_WAIT_TIMEOUT_MS = 5000
 MAX_TEXT_PREVIEW_CHARS = 5000
-
-_HOST = os.getenv("QTPY_MCP_HOST", "localhost")
-_PORT = int(os.getenv("QTPY_MCP_PORT", str(DEFAULT_PROBE_PORT)))
 
 mcp = MCPServer(
     "qtpy-mcp",
@@ -34,17 +31,68 @@ mcp = MCPServer(
         "drawing). Never use it to check widget state — qt_snapshot and qt_get_text are faster "
         "and cheaper for that.\n"
         "- qt_type with use_clipboard=True for multi-line text (prevents newlines from submitting "
-        "each line as a command in console widgets)."
+        "each line as a command in console widgets).\n"
+        "- Several Qt apps (Houdini, Blender, Maya, ...) can run at once. qt_list_instances shows "
+        "them. Address any of them in the SAME conversation by passing `instance` to a tool: a pid "
+        '(1252151), an id (houdini-1252151), or words from a window title ("PIPE-1234"). '
+        "Switch between apps freely call to call. With exactly one app running no choice is "
+        "needed; with several, an ambiguous reference is an error that lists the candidates. "
+        "Refs (w1, w2 ...) belong to the instance that issued them."
     ),
 )
 
-_client = ProbeClient(host=_HOST, port=_PORT)
+_instances = InstanceManager()
 
 
-async def _ensure_connected() -> ProbeClient:
-    if not _client.connected:
-        await _client.connect()
-    return _client
+async def _ensure_connected(instance: str | int | None = None) -> ProbeClient:
+    """Connected client for the target app (see qt_list_instances / qt_select_instance)."""
+    return await _instances.client(instance)
+
+
+# --- Instances (several Qt apps at once) ---
+
+
+@mcp.tool()
+async def qt_list_instances() -> str:
+    """List running Qt apps that have the qtpy-mcp probe (Houdini, Blender, Maya, ...).
+
+    Shows each instance id, process, binding and visible window titles. Use the id with
+    the `instance` argument of any tool, or with qt_select_instance.
+    """
+    items = await _instances.describe_all()
+    if not items:
+        return (
+            "No running Qt app with the qtpy-mcp probe was found. Start the app with "
+            "QTPY_MCP_PROBE=1 or call `qtpy_mcp.probe.install()` inside it."
+        )
+    lines = [f"{len(items)} instance(s):"]
+    for it in items:
+        mark = " [selected]" if it.get("selected") else ""
+        head = (
+            f"  - {it['id']}{mark}: pid {it.get('pid')}, "
+            f"{it.get('binding', '?')} {it.get('qt_version', '')}"
+        )
+        lines.append(head.rstrip())
+        if it.get("error"):
+            lines.append(f"      unreachable: {it['error']}")
+            continue
+        if it.get("active_window"):
+            lines.append(f"      active window: {it['active_window']}")
+        if it.get("windows"):
+            lines.append("      windows: " + "; ".join(it["windows"][:8]))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def qt_select_instance(instance: str | int) -> str:
+    """Make one running Qt app the default target for later tool calls.
+
+    Args:
+        instance: Instance id, pid, name, or words from a window title, e.g. "PIPE-1234".
+    """
+    info = await _instances.resolve(instance)
+    _instances.select(info)
+    return f"Selected {info.id} (pid {info.pid})."
 
 
 # --- Snapshot & Navigation ---
@@ -55,6 +103,7 @@ async def qt_snapshot(
     max_depth: int = DEFAULT_SNAPSHOT_DEPTH,
     root_ref: str | None = None,
     skip_hidden: bool = False,
+    instance: str | int | None = None,
 ) -> str:
     """Capture the full Qt widget tree as a structured accessibility-like snapshot.
 
@@ -62,7 +111,7 @@ async def qt_snapshot(
     geometry, visibility, enabled state, and interaction refs (w1, w2, ...).
     Use the refs to interact with specific widgets via other tools.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"max_depth": max_depth}
     if root_ref:
         params["root_ref"] = root_ref
@@ -84,6 +133,7 @@ async def qt_find_widget(
     root_ref: str | None = None,
     visible_only: bool = True,
     max_results: int = 20,
+    instance: str | int | None = None,
 ) -> str:
     """Search the widget tree for widgets matching criteria. Prefer over qt_snapshot.
 
@@ -103,7 +153,7 @@ async def qt_find_widget(
 
     At least one of pattern, class_name, object_name, or text must be provided.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params: dict = {
         "pattern": pattern,
         "class_name": class_name,
@@ -145,6 +195,7 @@ async def qt_screenshot(
     max_height: int = DEFAULT_SCREENSHOT_MAX_HEIGHT,
     format: str = DEFAULT_SCREENSHOT_FORMAT,
     quality: int = DEFAULT_JPEG_QUALITY,
+    instance: str | int | None = None,
 ) -> list:
     """Take a screenshot of the entire window or a specific widget.
 
@@ -158,7 +209,7 @@ async def qt_screenshot(
 
     Returns a base64-encoded PNG image.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {
         "max_width": max_width,
         "max_height": max_height,
@@ -179,7 +230,7 @@ async def qt_screenshot(
 
 
 @mcp.tool()
-async def qt_widget_details(ref: str) -> str:
+async def qt_widget_details(ref: str, instance: str | int | None = None) -> str:
     """Get detailed properties of a specific widget.
 
     Args:
@@ -187,7 +238,7 @@ async def qt_widget_details(ref: str) -> str:
 
     Returns all Qt properties, geometry, parent chain, and more.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("widget_details", {"ref": ref})
     lines = [f"Class: {result.get('class', '?')}"]
     if result.get("objectName"):
@@ -231,6 +282,7 @@ async def qt_click(
     button: str = "left",
     modifiers: list[str] | None = None,
     position: list[int] | None = None,
+    instance: str | int | None = None,
 ) -> str:
     """Click a widget.
 
@@ -240,7 +292,7 @@ async def qt_click(
         modifiers: Keyboard modifiers - 'shift', 'ctrl', 'alt', 'meta'.
         position: [x, y] relative to widget top-left. Default: center.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"ref": ref, "button": button}
     if modifiers:
         params["modifiers"] = modifiers
@@ -252,7 +304,11 @@ async def qt_click(
 
 @mcp.tool()
 async def qt_type(
-    ref: str, text: str, clear_first: bool = False, use_clipboard: bool = False
+    ref: str,
+    text: str,
+    clear_first: bool = False,
+    use_clipboard: bool = False,
+    instance: str | int | None = None,
 ) -> str:
     """Type text into a widget.
 
@@ -264,7 +320,7 @@ async def qt_type(
             Use this for multi-line text in console/terminal widgets — character-by-character
             typing treats each newline as Enter (submit), corrupting multi-line input.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     await client.call(
         "type_text",
         {"ref": ref, "text": text, "clear_first": clear_first, "use_clipboard": use_clipboard},
@@ -273,14 +329,14 @@ async def qt_type(
 
 
 @mcp.tool()
-async def qt_key_press(key: str, ref: str | None = None) -> str:
+async def qt_key_press(key: str, ref: str | None = None, instance: str | int | None = None) -> str:
     """Send a key event to a widget or the focused widget.
 
     Args:
         key: Key name (e.g., 'Return', 'Escape', 'Ctrl+S', 'a').
         ref: Widget ref. If omitted, sends to the currently focused widget.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"key": key}
     if ref:
         params["ref"] = ref
@@ -289,7 +345,9 @@ async def qt_key_press(key: str, ref: str | None = None) -> str:
 
 
 @mcp.tool()
-async def qt_set_property(ref: str, property_name: str, value: str | int | float | bool) -> str:
+async def qt_set_property(
+    ref: str, property_name: str, value: str | int | float | bool, instance: str | int | None = None
+) -> str:
     """Set a Qt property on a widget.
 
     Args:
@@ -297,7 +355,7 @@ async def qt_set_property(ref: str, property_name: str, value: str | int | float
         property_name: Qt property name.
         value: New value for the property.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call(
         "set_property", {"ref": ref, "property_name": property_name, "value": value}
     )
@@ -305,21 +363,21 @@ async def qt_set_property(ref: str, property_name: str, value: str | int | float
 
 
 @mcp.tool()
-async def qt_invoke_slot(ref: str, method_name: str) -> str:
+async def qt_invoke_slot(ref: str, method_name: str, instance: str | int | None = None) -> str:
     """Invoke a slot or method on a QObject.
 
     Args:
         ref: Widget ref from qt_snapshot.
         method_name: Slot/method name to invoke.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("invoke_slot", {"ref": ref, "method_name": method_name})
     ok = result.get("ok", False)
     return f"Invoked {method_name}: {'success' if ok else 'failed'}"
 
 
 @mcp.tool()
-async def qt_get_text(ref: str) -> str:
+async def qt_get_text(ref: str, instance: str | int | None = None) -> str:
     """Extract text content from a text editor or input widget.
 
     Args:
@@ -328,7 +386,7 @@ async def qt_get_text(ref: str) -> str:
     Works with QPlainTextEdit, QTextEdit, QLineEdit, QLabel, QComboBox,
     and any widget with a text() or toPlainText() method.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("get_text", {"ref": ref})
     text = result["text"]
     length = result["length"]
@@ -355,6 +413,7 @@ async def qt_trigger_action(
     ref: str,
     action_text: str | None = None,
     action_index: int | None = None,
+    instance: str | int | None = None,
 ) -> str:
     """Trigger a menu action or toolbar action by text or index.
 
@@ -369,9 +428,9 @@ async def qt_trigger_action(
     Use qt_menu_items first to see available actions.
     """
     if (action_text is None) == (action_index is None):
-        raise ValueError("Provide exactly one of action_text or action_index")
+        raise ToolError("Provide exactly one of action_text or action_index")
 
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"ref": ref}
     if action_text is not None:
         params["action_text"] = action_text
@@ -389,6 +448,7 @@ async def qt_wait_for(
     ref: str | None = None,
     property_name: str | None = None,
     value: str | int | float | bool | None = None,
+    instance: str | int | None = None,
 ) -> str:
     """Wait for a UI state change.
 
@@ -400,7 +460,7 @@ async def qt_wait_for(
         property_name: Property name (for property_equals).
         value: Expected value (for property_equals).
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"condition": condition, "timeout_ms": timeout_ms}
     if object_name:
         params["object_name"] = object_name
@@ -416,7 +476,7 @@ async def qt_wait_for(
 
 
 @mcp.tool()
-async def qt_batch(steps: list[dict]) -> str:
+async def qt_batch(steps: list[dict], instance: str | int | None = None) -> str:
     """Execute multiple Qt operations in a single round trip.
 
     Chains clicks, types, key presses, waits, snapshots, and reads into one
@@ -454,7 +514,7 @@ async def qt_batch(steps: list[dict]) -> str:
             {"method": "snapshot",  "params": {"max_depth": 4}},
         ])
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("batch", {"steps": steps})
 
     results = result.get("results", [])
@@ -518,9 +578,9 @@ async def qt_batch(steps: list[dict]) -> str:
 
 
 @mcp.tool()
-async def qt_list_windows(skip_hidden: bool = True) -> str:
+async def qt_list_windows(skip_hidden: bool = True, instance: str | int | None = None) -> str:
     """List all top-level windows and their types."""
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {}
     if skip_hidden:
         params["skip_hidden"] = skip_hidden
@@ -534,7 +594,9 @@ async def qt_list_windows(skip_hidden: bool = True) -> str:
 
 @mcp.tool()
 async def qt_object_tree(
-    root_ref: str | None = None, max_depth: int = DEFAULT_SNAPSHOT_DEPTH
+    root_ref: str | None = None,
+    max_depth: int = DEFAULT_SNAPSHOT_DEPTH,
+    instance: str | int | None = None,
 ) -> str:
     """Get the full QObject parent-child tree (not just visible widgets).
 
@@ -542,7 +604,7 @@ async def qt_object_tree(
         root_ref: Starting ref. Defaults to QApplication root.
         max_depth: Maximum traversal depth.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     params = {"max_depth": max_depth}
     if root_ref:
         params["root_ref"] = root_ref
@@ -553,9 +615,9 @@ async def qt_object_tree(
 
 
 @mcp.tool()
-async def qt_active_popup() -> str:
+async def qt_active_popup(instance: str | int | None = None) -> str:
     """Check for active popup or modal dialog widgets."""
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("active_popup")
     parts = []
     if result.get("popup"):
@@ -568,13 +630,13 @@ async def qt_active_popup() -> str:
 
 
 @mcp.tool()
-async def qt_menu_items(ref: str) -> str:
+async def qt_menu_items(ref: str, instance: str | int | None = None) -> str:
     """Get actions from a QMenu widget.
 
     Args:
         ref: Ref to a QMenu widget.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("menu_items", {"ref": ref})
     actions = result.get("actions", [])
     if not actions:
@@ -600,6 +662,7 @@ async def qt_menu_items(ref: str) -> str:
 @mcp.tool()
 async def qt_messages(
     level: str = "info",
+    instance: str | int | None = None,
 ) -> str:
     """Returns all console messages
 
@@ -607,7 +670,7 @@ async def qt_messages(
         level: Level of the console messages to return. Each level includes the messages
             of more severe levels. Defaults to "info".
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("qt_messages", {"level": level})
     messages = result.get("messages", [])
     if not messages:
@@ -619,13 +682,13 @@ async def qt_messages(
 
 
 @mcp.tool()
-async def qt_thread_check() -> str:
+async def qt_thread_check(instance: str | int | None = None) -> str:
     """Check thread affinity of all QObjects to detect threading issues.
 
     Reports which threads own QObjects, flags QWidget subclasses on non-GUI
     threads (the #1 cause of GUI freezes), and lists QThread instances.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("thread_check", {})
     lines = [f"GUI thread: {result['gui_thread']}"]
     lines.append(f"\nThreads ({len(result['threads'])}):")
@@ -649,7 +712,7 @@ async def qt_thread_check() -> str:
 
 
 @mcp.tool()
-async def qt_signals(ref: str) -> str:
+async def qt_signals(ref: str, instance: str | int | None = None) -> str:
     """Inspect signal connections on a QObject.
 
     For a given widget/object, enumerates all signals and reports which are
@@ -659,7 +722,7 @@ async def qt_signals(ref: str) -> str:
     Args:
         ref: Widget ref from qt_snapshot (e.g., 'w5').
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("signals", {"ref": ref})
     signals = result.get("signals", [])
     if not signals:
@@ -672,7 +735,7 @@ async def qt_signals(ref: str) -> str:
 
 
 @mcp.tool()
-async def qt_layout_check() -> str:
+async def qt_layout_check(instance: str | int | None = None) -> str:
     """Detect layout issues in the visible widget tree.
 
     Scans all visible widgets and reports problems like:
@@ -682,7 +745,7 @@ async def qt_layout_check() -> str:
     - text_truncated: Text content wider than widget width
     - overlapping_siblings: Sibling widgets with intersecting geometries
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("layout_check", {})
     issues = result.get("issues", [])
     scanned = result.get("scanned", 0)
@@ -702,13 +765,13 @@ async def qt_layout_check() -> str:
 
 
 @mcp.tool()
-async def qt_scene_snapshot(ref: str) -> str:
+async def qt_scene_snapshot(ref: str, instance: str | int | None = None) -> str:
     """Get all items in a QGraphicsScene.
 
     Args:
         ref: Ref to a QGraphicsView widget.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("scene_snapshot", {"ref": ref})
     items = result.get("items", [])
     if not items:
@@ -730,13 +793,13 @@ async def qt_scene_snapshot(ref: str) -> str:
 
 
 @mcp.tool()
-async def qt_vtk_scene_info(ref: str) -> str:
+async def qt_vtk_scene_info(ref: str, instance: str | int | None = None) -> str:
     """Get VTK scene state from a PyVista/VTK widget.
 
     Args:
         ref: Ref to a widget containing a VTK render window.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("vtk_scene_info", {"ref": ref})
 
     lines = []
@@ -761,13 +824,13 @@ async def qt_vtk_scene_info(ref: str) -> str:
 
 
 @mcp.tool()
-async def qt_vtk_screenshot(ref: str) -> list:
+async def qt_vtk_screenshot(ref: str, instance: str | int | None = None) -> list:
     """Capture a VTK render window to an image.
 
     Args:
         ref: Ref to a widget containing a VTK render window.
     """
-    client = await _ensure_connected()
+    client = await _ensure_connected(instance)
     result = await client.call("vtk_screenshot", {"ref": ref})
     return [
         ImageContent(type="image", data=result["image"], mimeType="image/png"),

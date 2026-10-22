@@ -2,11 +2,10 @@
 
 import subprocess
 import sys
+import tempfile
 import textwrap
 
 import pytest
-
-from qtpy_mcp.server.probe_client import DEFAULT_PROBE_PORT
 
 RUN_TIMEOUT_SECONDS = 15
 pytestmark = pytest.mark.requires_socket
@@ -17,6 +16,7 @@ def _run_script(script: str, env_vars: dict | None = None) -> subprocess.Complet
 
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
+    env["QTPY_MCP_REGISTRY_DIR"] = tempfile.mkdtemp(prefix="qtpy-mcp-test-")
     if env_vars:
         env.update(env_vars)
     return subprocess.run(
@@ -83,5 +83,4 @@ def test_auto_hook_custom_port():
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "port=" in result.stdout
     port = int(result.stdout.strip().split("=")[1])
-    assert port != DEFAULT_PROBE_PORT
     assert port > 0
