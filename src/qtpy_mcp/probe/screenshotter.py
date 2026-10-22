@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import os
+from typing import Any
 
 from qtpy_mcp.probe._qt import QtCore, QtWidgets, scoped
 from qtpy_mcp.probe.ref_registry import RefRegistry
@@ -38,7 +39,7 @@ class Screenshotter:
         max_height: int = DEFAULT_SCREENSHOT_MAX_HEIGHT,
         format: str = "png",
         quality: int = DEFAULT_JPEG_QUALITY,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Grab a widget (or full window) as a base64 image."""
         if ref:
             obj = self._registry.resolve_or_raise(ref)

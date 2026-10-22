@@ -33,7 +33,7 @@ class JsonRpcServer(QObject):
 
     def __init__(
         self,
-        handler: Callable[[str, dict], Any],
+        handler: Callable[[str, dict[str, Any]], Any],
         parent: QObject | None = None,
         token: str | None = None,
     ) -> None:
@@ -49,7 +49,7 @@ class JsonRpcServer(QObject):
         return bool(self._server.listen(self._localhost, port))
 
     def port(self) -> int:
-        return self._server.serverPort()
+        return int(self._server.serverPort())
 
     @Slot()
     def _on_connection(self) -> None:

@@ -16,7 +16,7 @@ class SceneInspector:
     def __init__(self, registry: RefRegistry) -> None:
         self._registry = registry
 
-    def scene_snapshot(self, ref: str) -> dict:
+    def scene_snapshot(self, ref: str) -> dict[str, Any]:
         """Get all items in a QGraphicsScene."""
         obj = self._registry.resolve_or_raise(ref)
         if not isinstance(obj, QGraphicsView):
@@ -50,7 +50,7 @@ class SceneInspector:
 
         return {"items": items}
 
-    def scene_item_details(self, ref: str, item_index: int) -> dict:
+    def scene_item_details(self, ref: str, item_index: int) -> dict[str, Any]:
         """Get details of a specific scene item by index."""
         obj = self._registry.resolve_or_raise(ref)
         if not isinstance(obj, QGraphicsView):

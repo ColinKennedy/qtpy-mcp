@@ -33,7 +33,7 @@ class VtkInspector:
     def __init__(self, registry: RefRegistry) -> None:
         self._registry = registry
 
-    def vtk_scene_info(self, ref: str) -> dict:
+    def vtk_scene_info(self, ref: str) -> dict[str, Any]:
         """Get VTK scene state from a widget that wraps a VTK render window."""
         widget = self._resolve(ref)
         render_window = self._get_render_window(widget)
@@ -88,7 +88,7 @@ class VtkInspector:
             "size": list(size),
         }
 
-    def vtk_screenshot(self, ref: str) -> dict:
+    def vtk_screenshot(self, ref: str) -> dict[str, Any]:
         """Capture VTK render window to base64 PNG."""
         widget = self._resolve(ref)
 

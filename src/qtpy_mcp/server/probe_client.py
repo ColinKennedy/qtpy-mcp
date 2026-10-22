@@ -27,8 +27,8 @@ class ProbeClient:
         self._host = host
         self._port = port
         self._token = token
-        self._reader = None
-        self._writer = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
         self._request_id = 0
         self._lock = asyncio.Lock()
 

@@ -16,13 +16,16 @@ import secrets
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from qtpy_mcp import registry
 from qtpy_mcp.probe._qt import QT_BINDING, QtCore, QtWidgets, scoped
 from qtpy_mcp.probe.api_inspector import ApiInspector
+from qtpy_mcp.probe.finder import SemanticFinder
 from qtpy_mcp.probe.interactor import Interactor
 from qtpy_mcp.probe.introspector import Introspector
 from qtpy_mcp.probe.layout_inspector import LayoutInspector
+from qtpy_mcp.probe.recording import RecordingManager
 from qtpy_mcp.probe.ref_registry import RefRegistry
 from qtpy_mcp.probe.rpc_server import JsonRpcServer
 from qtpy_mcp.probe.scene_inspector import SceneInspector
@@ -71,15 +74,19 @@ class Probe(QObject):
         self._thread_inspector = ThreadInspector()
         self._layout_inspector = LayoutInspector(self._registry)
         self._api_inspector = ApiInspector(self._registry)
+        self._finder = SemanticFinder(self._registry)
+        self._recorder = RecordingManager(self._registry)
 
         # Qt message capture ring buffer
-        self._messages: collections.deque[dict] = collections.deque(maxlen=MESSAGE_BUFFER_MAX)
+        self._messages: collections.deque[dict[str, Any]] = collections.deque(
+            maxlen=MESSAGE_BUFFER_MAX
+        )
         self._previous_handler = QtCore.qInstallMessageHandler(self._message_handler)
 
         self._rpc = JsonRpcServer(self._dispatch, parent=self, token=self._token)
         self._port = port
 
-    def _message_handler(self, msg_type, context, message: str) -> None:
+    def _message_handler(self, msg_type: Any, context: Any, message: str) -> None:
         """Callback for qInstallMessageHandler — captures Qt internal warnings."""
         level = _MSG_TYPE_MAP.get(msg_type, "warning")
         self._messages.append(
@@ -93,7 +100,7 @@ class Probe(QObject):
         if self._previous_handler is not None:
             self._previous_handler(msg_type, context, message)
 
-    def _get_messages(self, level: str = "info") -> dict:
+    def _get_messages(self, level: str = "info") -> dict[str, Any]:
         """Return captured Qt messages at or above the given severity level, then clear."""
         min_severity = _LEVEL_SEVERITY.get(level, 1)
         filtered = [m for m in self._messages if _LEVEL_SEVERITY.get(m["level"], 0) >= min_severity]
@@ -143,7 +150,7 @@ class Probe(QObject):
         if self._info is not None:
             registry.unregister(self._info.id)
 
-    def _instance_info(self) -> dict:
+    def _instance_info(self) -> dict[str, Any]:
         app = QApplication.instance()
         active = app.activeWindow() if app is not None else None
         windows = [
@@ -156,7 +163,7 @@ class Probe(QObject):
         info["active_window"] = active.windowTitle() if active is not None else None
         return info
 
-    def _dispatch(self, method: str, params: dict) -> object:
+    def _dispatch(self, method: str, params: dict[str, Any]) -> object:
         if method == "ping":
             return "pong"
         if method == "instance_info":
@@ -209,11 +216,19 @@ class Probe(QObject):
             return self._layout_inspector.layout_check()
         if method == "find_widget":
             return self._introspector.find_widget(**params)
+        if method == "find_semantic":
+            return self._finder.find(**params)
+        if method == "find_target":
+            return self._finder.find_target(**params)
+        if method == "record_start":
+            return self._recorder.record_start(**params)
+        if method == "record_stop":
+            return self._recorder.record_stop(**params)
         if method == "batch":
             return self._batch(**params)
         raise ValueError(f"Unknown method: {method}")
 
-    def _batch(self, steps: list) -> dict:
+    def _batch(self, steps: list[Any]) -> dict[str, Any]:
         """Execute multiple RPC methods sequentially in one round trip."""
         results = []
         for i, step in enumerate(steps):
@@ -316,11 +331,11 @@ def _auto_hook() -> None:
 
     _original_init = QApplication.__init__
 
-    def _patched_init(self, *args, **kwargs):
+    def _patched_init(self: Any, *args: Any, **kwargs: Any) -> None:
         _original_init(self, *args, **kwargs)
         install()
 
-    QApplication.__init__ = _patched_init
+    QApplication.__init__ = _patched_init  # type: ignore[method-assign]
     if QApplication.instance() is not None:
         install()
 

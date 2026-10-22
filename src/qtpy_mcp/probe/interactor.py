@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from qtpy_mcp.probe._qt import QtCore, QtGui, QtWidgets, scoped
 from qtpy_mcp.probe.ref_registry import RefRegistry
@@ -68,7 +68,7 @@ _KEY_MAP: dict[str, int] = {
 }
 
 
-def _parse_modifiers(modifiers: list[str] | None) -> Qt.KeyboardModifier:
+def _parse_modifiers(modifiers: list[str] | None) -> Any:
     result = Qt.KeyboardModifier.NoModifier
     for m in modifiers or []:
         mod = _MODIFIER_MAP.get(m.lower())
@@ -77,7 +77,7 @@ def _parse_modifiers(modifiers: list[str] | None) -> Qt.KeyboardModifier:
     return result
 
 
-def _parse_key(key_str: str) -> tuple[int, Qt.KeyboardModifier, str]:
+def _parse_key(key_str: str) -> tuple[int, Any, str]:
     """Parse key string like 'Ctrl+S' into (qt_key, modifiers, text)."""
     parts = key_str.split("+")
     modifiers = Qt.KeyboardModifier.NoModifier
@@ -107,10 +107,10 @@ def _find_widget_by_name(name: str) -> QWidget | None:
         return None
     for tlw in app.topLevelWidgets():
         if tlw.objectName() == name and tlw.isVisible():
-            return tlw
+            return cast("QWidget", tlw)
         found = tlw.findChild(QWidget, name)
         if found and found.isVisible():
-            return found
+            return cast("QWidget", found)
     return None
 
 
@@ -126,7 +126,7 @@ class Interactor:
         button: str = "left",
         modifiers: list[str] | None = None,
         position: list[int] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Synthesize a mouse click on a widget."""
         widget = self._resolve_widget(ref)
 
@@ -160,7 +160,7 @@ class Interactor:
 
     def type_text(
         self, ref: str, text: str, clear_first: bool = False, use_clipboard: bool = False
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Type text into a widget by sending key events or via clipboard paste.
 
         Args:
@@ -209,7 +209,7 @@ class Interactor:
         QApplication.processEvents()
         return {"ok": True}
 
-    def key_press(self, key: str, ref: str | None = None) -> dict:
+    def key_press(self, key: str, ref: str | None = None) -> dict[str, Any]:
         """Send a key event to a widget or the focused widget."""
         if ref:
             widget = self._resolve_widget(ref)
@@ -227,7 +227,7 @@ class Interactor:
 
         return {"ok": True}
 
-    def set_property(self, ref: str, property_name: str, value: Any) -> dict:
+    def set_property(self, ref: str, property_name: str, value: Any) -> dict[str, Any]:
         """Set a Qt property on a QObject."""
         obj = self._registry.resolve(ref)
         if obj is None:
@@ -240,7 +240,9 @@ class Interactor:
         QApplication.processEvents()
         return {"ok": ok, "old_value": repr(old_value)}
 
-    def invoke_slot(self, ref: str, method_name: str, args: list | None = None) -> dict:
+    def invoke_slot(
+        self, ref: str, method_name: str, args: list[Any] | None = None
+    ) -> dict[str, Any]:
         """Invoke a slot/method on a QObject using QMetaObject.invokeMethod."""
         obj = self._registry.resolve(ref)
         if obj is None:
@@ -261,7 +263,7 @@ class Interactor:
         ref: str | None = None,
         property_name: str | None = None,
         value: Any = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Poll for a UI condition within the Qt event loop."""
         app = QApplication.instance()
         if app is None:
@@ -317,7 +319,7 @@ class Interactor:
 
         raise TimeoutError(f"Timed out after {timeout_ms}ms waiting for condition: {condition}")
 
-    def get_text(self, ref: str) -> dict:
+    def get_text(self, ref: str) -> dict[str, Any]:
         """Extract text content from a text-bearing widget."""
         obj = self._registry.resolve(ref)
         if obj is None:
@@ -360,7 +362,7 @@ class Interactor:
         ref: str,
         action_text: str | None = None,
         action_index: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Trigger a QAction by text or index from any widget with actions()."""
         obj = self._registry.resolve(ref)
         if obj is None:
@@ -375,7 +377,7 @@ class Interactor:
         if (action_text is None) == (action_index is None):
             raise ValueError("Provide exactly one of action_text or action_index")
 
-        target = None
+        target: Any = None
         if action_index is not None:
             if action_index < 0 or action_index >= len(actions):
                 raise ValueError(

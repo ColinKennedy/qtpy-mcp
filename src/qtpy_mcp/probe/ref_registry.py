@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+from typing import Any
 
 
 class RefRegistry:
@@ -11,8 +12,8 @@ class RefRegistry:
     def __init__(self) -> None:
         self._counter = 0
         self._generation = 0
-        self._refs = {}
-        self._reverse = {}
+        self._refs: dict[str, Any] = {}
+        self._reverse: dict[int, str] = {}
 
     @property
     def generation(self) -> int:

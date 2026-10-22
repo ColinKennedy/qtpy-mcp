@@ -26,18 +26,18 @@ def _truncate(val: str, limit: int = MAX_PROPERTY_LENGTH) -> str:
     return val
 
 
-def _safe_text(obj: QObject) -> str | None:
+def _safe_text(obj: Any) -> str | None:
     """Try to read .text() from widget, return None on failure."""
     if not hasattr(obj, "text"):
         return None
     try:
-        val = obj.text()  # type: ignore[call-arg, attr-defined]
+        val = obj.text()
         return str(val) if val else None
     except (TypeError, RuntimeError):
         return None
 
 
-def _read_properties(obj: QObject) -> dict[str, Any]:
+def _read_properties(obj: Any) -> dict[str, Any]:
     """Read all QMetaObject properties, skipping ones in the header."""
     meta = obj.metaObject()
     props: dict[str, Any] = {}
@@ -59,19 +59,18 @@ def _read_properties(obj: QObject) -> dict[str, Any]:
     return props
 
 
-def _read_tree_widget_items(tree_widget: Any, registry: RefRegistry) -> list[dict]:
+def _read_tree_widget_items(tree_widget: Any, registry: RefRegistry) -> list[dict[str, Any]]:
     """Extract items from QTreeWidget."""
     from qtpy_mcp.probe._qt import QtWidgets as _QtW
 
     QTreeWidget = _QtW.QTreeWidget
-    QTreeWidgetItem = _QtW.QTreeWidgetItem
 
     if not isinstance(tree_widget, QTreeWidget):
         return []
 
-    items: list[dict] = []
+    items: list[dict[str, Any]] = []
 
-    def _walk_item(item: QTreeWidgetItem, depth: int) -> None:
+    def _walk_item(item: Any, depth: int) -> None:
         text = item.text(0)
         ref = registry.register(item, prefix="i")
         expanded = item.isExpanded()
@@ -109,7 +108,7 @@ class Introspector:
         max_depth: int = 10,
         root_ref: str | None = None,
         skip_hidden: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build widget tree snapshot from all top-level windows."""
         app = QApplication.instance()
         if app is None:
@@ -156,9 +155,9 @@ class Introspector:
             "generation": self._registry.generation,
         }
 
-    def widget_details(self, ref: str) -> dict:
+    def widget_details(self, ref: str) -> dict[str, Any]:
         """Get detailed properties of a specific widget."""
-        obj = self._registry.resolve_or_raise(ref)
+        obj: Any = self._registry.resolve_or_raise(ref)
 
         meta = obj.metaObject() if isinstance(obj, QObject) else None
         result: dict[str, Any] = {
@@ -212,7 +211,7 @@ class Introspector:
             result["properties"] = _read_properties(obj)
             # Parent chain
             chain: list[str] = []
-            p = obj.parent()
+            p: Any = obj.parent()
             while p is not None:
                 chain.append(f"{type(p).__name__}({p.objectName()})")
                 p = p.parent()
@@ -235,7 +234,7 @@ class Introspector:
         root_ref: str | None = None,
         visible_only: bool = True,
         max_results: int = 20,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Search the widget tree for widgets matching criteria.
 
         At least one of pattern, class_name, object_name, or text must be set.
@@ -271,7 +270,7 @@ class Introspector:
         object_lower = object_name.lower()
         text_lower = text.lower()
 
-        matches: list[dict] = []
+        matches: list[dict[str, Any]] = []
 
         def _walk(widget: QWidget) -> None:
             if len(matches) >= max_results:
@@ -333,7 +332,7 @@ class Introspector:
 
         return {"widgets": matches, "count": len(matches)}
 
-    def list_windows(self, skip_hidden: bool = True) -> dict:
+    def list_windows(self, skip_hidden: bool = True) -> dict[str, Any]:
         """List all top-level windows."""
         app = QApplication.instance()
         if app is None:
@@ -343,7 +342,7 @@ class Introspector:
         if skip_hidden:
             widgets = [w for w in widgets if w.isVisible()]
 
-        windows: list[dict] = []
+        windows: list[dict[str, Any]] = []
         for w in widgets:
             try:
                 windows.append(
@@ -358,7 +357,7 @@ class Introspector:
                 continue  # C++ object deleted
         return {"windows": windows}
 
-    def object_tree(self, root_ref: str | None = None, max_depth: int = 10) -> dict:
+    def object_tree(self, root_ref: str | None = None, max_depth: int = 10) -> dict[str, Any]:
         """Get the full QObject tree (not just visible widgets)."""
         if root_ref:
             # Issue #2: resolve FIRST, then walk WITHOUT clearing
@@ -386,7 +385,7 @@ class Introspector:
                 continue
         return {"tree": "\n".join(lines), "count": count}
 
-    def active_popup(self) -> dict:
+    def active_popup(self) -> dict[str, Any]:
         """Check for active popup/modal widgets."""
         app = QApplication.instance()
         if app is None:
@@ -412,7 +411,7 @@ class Introspector:
 
         return result
 
-    def menu_items(self, ref: str) -> dict:
+    def menu_items(self, ref: str) -> dict[str, Any]:
         """Enumerate actions in a QMenu."""
         QMenu = QtWidgets.QMenu
 
@@ -516,7 +515,7 @@ class Introspector:
 
         return count
 
-    def _walk_object(self, obj: QObject, depth: int, max_depth: int, lines: list[str]) -> int:
+    def _walk_object(self, obj: Any, depth: int, max_depth: int, lines: list[str]) -> int:
         """Recursively walk QObject tree (all objects, not just widgets)."""
         if depth > max_depth:
             return 0

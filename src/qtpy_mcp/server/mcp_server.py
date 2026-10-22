@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
+from typing import Any
+
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ImageContent, TextContent
 
+from qtpy_mcp.server.gif import DEFAULT_MAX_WIDTH as GIF_MAX_WIDTH
+from qtpy_mcp.server.gif import encode_gif
 from qtpy_mcp.server.instances import InstanceManager
 from qtpy_mcp.server.probe_client import ProbeClient
 
@@ -47,6 +53,57 @@ _instances = InstanceManager()
 async def _ensure_connected(instance: str | int | None = None) -> ProbeClient:
     """Connected client for the target app (see qt_list_instances / qt_select_instance)."""
     return await _instances.client(instance)
+
+
+async def _target(instance: str | int | None) -> tuple[str, ProbeClient]:
+    """``(instance_id, client)`` for the app a call is addressed to."""
+    info = await _instances.resolve(instance)
+    return info.id, await _instances.client(info.id)
+
+
+def _selector_params(
+    describe: str,
+    window_title: str,
+    class_name: str,
+    object_name: str,
+    search_fields: list[str] | None,
+    min_score: float,
+    visible_only: bool = True,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "describe": describe,
+        "window_title": window_title,
+        "class_name": class_name,
+        "object_name": object_name,
+        "min_score": min_score,
+        "visible_only": visible_only,
+    }
+    if search_fields:
+        params["search_fields"] = search_fields
+    return params
+
+
+def _format_widgets(result: dict[str, Any], *, header: str = "") -> str:
+    widgets = result.get("widgets", [])
+    if not widgets:
+        return "No widgets found matching criteria."
+    lines = [header or f"Found {result.get('count', len(widgets))} widget(s):"]
+    for w in widgets:
+        g = w.get("geometry", {})
+        size = f"{g.get('width', 0)}x{g.get('height', 0)}"
+        name = f' "{w["objectName"]}"' if w.get("objectName") else ""
+        text_val = f' text="{w["text"]}"' if w.get("text") else ""
+        flags = []
+        if not w.get("visible", True):
+            flags.append("hidden")
+        if not w.get("enabled", True):
+            flags.append("disabled")
+        flag_str = f" [{', '.join(flags)}]" if flags else ""
+        why = ""
+        if w.get("matched_field"):
+            why = f" (score {w.get('score')}, {w['matched_field']}: {w.get('matched_value', '')!r})"
+        lines.append(f"  - {w['class']}{name} [ref={w['ref']}] {size}{text_val}{flag_str}{why}")
+    return "\n".join(lines)
 
 
 # --- Instances (several Qt apps at once) ---
@@ -112,7 +169,7 @@ async def qt_snapshot(
     Use the refs to interact with specific widgets via other tools.
     """
     client = await _ensure_connected(instance)
-    params = {"max_depth": max_depth}
+    params: dict[str, Any] = {"max_depth": max_depth}
     if root_ref:
         params["root_ref"] = root_ref
     if skip_hidden:
@@ -133,9 +190,20 @@ async def qt_find_widget(
     root_ref: str | None = None,
     visible_only: bool = True,
     max_results: int = 20,
+    describe: str = "",
+    window_title: str = "",
+    search_fields: list[str] | None = None,
+    min_score: float = 0.5,
     instance: str | int | None = None,
 ) -> str:
     """Search the widget tree for widgets matching criteria. Prefer over qt_snapshot.
+
+    Two modes. With `describe` and/or `window_title` it is a *semantic* search: `describe`
+    is matched fuzzily (typos, punctuation and case ignored) against label/button text,
+    group and dock titles, tooltip, what's-this, status tip, accessible name/description,
+    objectName, placeholder, tab titles, dynamic properties, class name and style sheet;
+    results are ranked with the reason each matched. Otherwise the plain substring filters
+    below apply.
 
     Registers found widgets in the ref registry — returned refs are immediately
     usable with qt_click, qt_type, qt_get_text, etc.
@@ -150,11 +218,26 @@ async def qt_find_widget(
         root_ref: Restrict search to subtree of this widget.
         visible_only: Only return visible widgets (default True).
         max_results: Cap on results returned (default 20).
+        describe: Free-text description, e.g. 'Name goes here:' or 'save the profile'.
+        window_title: Fuzzy match on the top-level window title (e.g. 'PIPE-1234').
+        search_fields: Limit `describe` to some of: text, title, placeholder, tooltip,
+            whats_this, status_tip, accessible_name, accessible_description, object_name,
+            window_title, tab_text, properties, class_name, style_sheet.
+        min_score: Minimum semantic match score 0-1 (default 0.5).
 
-    At least one of pattern, class_name, object_name, or text must be provided.
+    At least one of pattern, class_name, object_name, text, describe or window_title
+    must be provided.
     """
     client = await _ensure_connected(instance)
-    params: dict = {
+    if describe or window_title or search_fields:
+        sem = _selector_params(
+            describe, window_title, class_name, object_name, search_fields, min_score, visible_only
+        )
+        sem["max_results"] = max_results
+        if root_ref:
+            sem["root_ref"] = root_ref
+        return _format_widgets(await client.call("find_semantic", sem))
+    params: dict[str, Any] = {
         "pattern": pattern,
         "class_name": class_name,
         "object_name": object_name,
@@ -164,27 +247,7 @@ async def qt_find_widget(
     }
     if root_ref:
         params["root_ref"] = root_ref
-    result = await client.call("find_widget", params)
-
-    widgets = result.get("widgets", [])
-    count = result.get("count", 0)
-    if not widgets:
-        return "No widgets found matching criteria."
-
-    lines = [f"Found {count} widget(s):"]
-    for w in widgets:
-        g = w.get("geometry", {})
-        size = f"{g.get('width', 0)}x{g.get('height', 0)}"
-        name = f' "{w["objectName"]}"' if w.get("objectName") else ""
-        text_val = f' text="{w["text"]}"' if w.get("text") else ""
-        flags = []
-        if not w.get("visible", True):
-            flags.append("hidden")
-        if not w.get("enabled", True):
-            flags.append("disabled")
-        flag_str = f" [{', '.join(flags)}]" if flags else ""
-        lines.append(f"  - {w['class']}{name} [ref={w['ref']}] {size}{text_val}{flag_str}")
-    return "\n".join(lines)
+    return _format_widgets(await client.call("find_widget", params))
 
 
 @mcp.tool()
@@ -195,22 +258,66 @@ async def qt_screenshot(
     max_height: int = DEFAULT_SCREENSHOT_MAX_HEIGHT,
     format: str = DEFAULT_SCREENSHOT_FORMAT,
     quality: int = DEFAULT_JPEG_QUALITY,
+    describe: str = "",
+    window_title: str = "",
+    class_name: str = "",
+    object_name: str = "",
+    search_fields: list[str] | None = None,
+    expand: str = "auto",
+    index: int = 0,
+    min_score: float = 0.5,
     instance: str | int | None = None,
-) -> list:
-    """Take a screenshot of the entire window or a specific widget.
+) -> list[Any]:
+    """Take a screenshot of a window or any widget, identified by ref OR by description.
+
+    Identify the widget semantically instead of by ref, e.g. describe="Name goes here:"
+    (a label: captures the widget that holds it), describe="save the profile" (tooltip),
+    window_title="PIPE-1234" with class_name="QDockWidget" (a docked widget), or
+    object_name="nameEdit". Add `instance` (pid, id or window title of the app) when
+    several Qt apps are running.
 
     Args:
-        ref: Widget ref from qt_snapshot (e.g., 'w5'). If omitted, captures active window.
+        ref: Widget ref from qt_snapshot/qt_find_widget. If nothing identifies a widget,
+            the active window is captured.
         full_window: If True, captures the first visible top-level window.
         max_width: Max width before downscaling (default 1920).
         max_height: Max height before downscaling (default 1080).
         format: Image format - 'png' or 'jpeg' (default 'png').
         quality: JPEG quality 1-100 (default 80, ignored for PNG).
+        describe: Free-text description matched against text, titles, tooltip, what's-this,
+            status tip, accessible name, objectName, placeholder, QSS ... (fuzzy).
+        window_title: Fuzzy match on the top-level window title.
+        class_name: Qt class, subclasses match (e.g. 'QDockWidget').
+        object_name: objectName, supports * and ? wildcards.
+        search_fields: Limit `describe` to specific fields (see qt_find_widget).
+        expand: What to capture relative to the match: 'auto' (a matched label captures the
+            widget holding it; anything else captures itself), 'self', 'parent', 'buddy'
+            (the label's field) or 'window'.
+        index: Which ranked match to use (0 = best).
+        min_score: Minimum semantic match score 0-1.
 
-    Returns a base64-encoded PNG image.
+    Returns an image plus a note saying what was captured.
     """
     client = await _ensure_connected(instance)
-    params = {
+    notes: list[str] = []
+    if not ref and (describe or window_title or class_name or object_name):
+        sel = _selector_params(
+            describe, window_title, class_name, object_name, search_fields, min_score
+        )
+        found = await client.call("find_target", {**sel, "expand": expand, "index": index})
+        ref = found["ref"]
+        t = found["target"]
+        label = t.get("objectName") or t.get("text") or ""
+        notes.append(f"Captured {t['class']}{f' {label!r}' if label else ''} [ref={ref}].")
+        if found.get("note"):
+            notes.append(found["note"])
+        alts = found.get("alternatives") or []
+        if alts:
+            notes.append(
+                "Other matches: "
+                + "; ".join(f"{a['class']} [ref={a['ref']}] score {a['score']}" for a in alts)
+            )
+    params: dict[str, Any] = {
         "max_width": max_width,
         "max_height": max_height,
         "format": format,
@@ -223,10 +330,201 @@ async def qt_screenshot(
     result = await client.call("screenshot", params)
     fmt = result.get("format", "png")
     mime = "image/jpeg" if fmt == "jpeg" else "image/png"
+    notes.insert(0, f"Size: {result['width']}x{result['height']}")
     return [
-        ImageContent(type="image", data=result["image"], mimeType=mime),
-        TextContent(type="text", text=f"Size: {result['width']}x{result['height']}"),
+        ImageContent(type="image", data=result["image"], mime_type=mime),
+        TextContent(type="text", text="\n".join(notes)),
     ]
+
+
+# --- GIF recording ---
+
+
+def _gif_result(rec: dict[str, Any], note: str = "") -> list[Any]:
+    frames = [(base64.b64decode(f["png"]), float(f["t"])) for f in rec["frames"]]
+    if not frames:
+        raise ToolError("The recording captured no frames.")
+    fps = float(rec.get("fps") or 10.0)
+    encoded = encode_gif(frames, last_frame_ms=int(1000 / fps), max_width=GIF_MAX_WIDTH)
+    notes = [
+        f"GIF: {encoded.width}x{encoded.height}, {len(frames)} frame(s), {encoded.duration_s:.1f}s"
+    ]
+    if note:
+        notes.append(note)
+    if rec.get("truncated"):
+        notes.append("Stopped early: frame size cap reached (lower max_width or fps).")
+    if rec.get("error"):
+        notes.append(str(rec["error"]))
+    return [
+        ImageContent(
+            type="image", data=base64.b64encode(encoded.data).decode(), mime_type="image/gif"
+        ),
+        TextContent(type="text", text="\n".join(notes)),
+    ]
+
+
+async def _start_recording(
+    instance: str | int | None,
+    ref: str | None,
+    fps: float,
+    max_seconds: float,
+    max_width: int,
+    sel: dict[str, Any],
+    expand: str,
+    index: int,
+) -> tuple[str, ProbeClient, dict[str, Any], str]:
+    instance_id, client = await _target(instance)
+    note = ""
+    if not ref and (
+        sel["describe"] or sel["window_title"] or sel["class_name"] or sel["object_name"]
+    ):
+        found = await client.call("find_target", {**sel, "expand": expand, "index": index})
+        ref = found["ref"]
+        note = found.get("note", "")
+    started = await client.call(
+        "record_start",
+        {"ref": ref, "fps": fps, "max_seconds": max_seconds, "max_width": max_width}
+        if ref
+        else {"fps": fps, "max_seconds": max_seconds, "max_width": max_width},
+    )
+    return instance_id, client, started, note
+
+
+@mcp.tool()
+async def qt_record_gif(
+    duration: float = 3.0,
+    fps: float = 10.0,
+    ref: str | None = None,
+    describe: str = "",
+    window_title: str = "",
+    class_name: str = "",
+    object_name: str = "",
+    search_fields: list[str] | None = None,
+    expand: str = "auto",
+    index: int = 0,
+    min_score: float = 0.5,
+    max_width: int = GIF_MAX_WIDTH,
+    instance: str | int | None = None,
+) -> list[Any]:
+    """Record an animated GIF of a window or widget for `duration` seconds.
+
+    Identify the widget exactly like qt_screenshot (ref, or describe/window_title/
+    class_name/object_name; the active window if nothing is given). The app keeps running
+    normally while recording; interact with it meanwhile via other tools or by hand. Works
+    on Windows and Linux (frames come from Qt's own rendering, no screen capture needed).
+    For longer or interleaved recordings use qt_record_start / qt_record_stop.
+    """
+    if not 0 < duration <= 30:
+        raise ToolError("duration must be between 0 and 30 seconds (use qt_record_start for more)")
+    sel = _selector_params(
+        describe, window_title, class_name, object_name, search_fields, min_score
+    )
+    _, client, started, note = await _start_recording(
+        instance, ref, fps, duration + 2.0, max_width, sel, expand, index
+    )
+    rid = started["recording_id"]
+    try:
+        await asyncio.sleep(duration)
+    finally:
+        # Always stop the probe-side timer, even if this call was cancelled.
+        rec = await asyncio.shield(client.call("record_stop", {"recording_id": rid}))
+    return _gif_result(rec, note)
+
+
+@mcp.tool()
+async def qt_record_start(
+    fps: float = 10.0,
+    max_seconds: float = 30.0,
+    ref: str | None = None,
+    describe: str = "",
+    window_title: str = "",
+    class_name: str = "",
+    object_name: str = "",
+    search_fields: list[str] | None = None,
+    expand: str = "auto",
+    index: int = 0,
+    min_score: float = 0.5,
+    max_width: int = GIF_MAX_WIDTH,
+    instance: str | int | None = None,
+) -> str:
+    """Start a background GIF recording; stop it later with qt_record_stop.
+
+    Returns a recording id that already names the app, so qt_record_stop needs no
+    `instance`. Recording stops by itself after `max_seconds`.
+    """
+    sel = _selector_params(
+        describe, window_title, class_name, object_name, search_fields, min_score
+    )
+    instance_id, _, started, note = await _start_recording(
+        instance, ref, fps, max_seconds, max_width, sel, expand, index
+    )
+    rid = f"{instance_id}:{started['recording_id']}"
+    return f"recording_id={rid}" + (f"\n{note}" if note else "")
+
+
+@mcp.tool()
+async def qt_record_stop(recording_id: str) -> list[Any]:
+    """Stop a recording started with qt_record_start and return the GIF.
+
+    Args:
+        recording_id: The id returned by qt_record_start (includes the app it belongs to).
+    """
+    instance_id, sep, probe_rid = recording_id.rpartition(":")
+    if not sep or not instance_id or not probe_rid:
+        raise ToolError(
+            "recording_id must look like '<instance>:<id>' as returned by qt_record_start"
+        )
+    client = await _ensure_connected(instance_id)
+    return _gif_result(await client.call("record_stop", {"recording_id": probe_rid}))
+
+
+# --- Search across every running app ---
+
+
+@mcp.tool()
+async def qt_find_anywhere(
+    describe: str = "",
+    window_title: str = "",
+    class_name: str = "",
+    object_name: str = "",
+    search_fields: list[str] | None = None,
+    min_score: float = 0.5,
+    visible_only: bool = True,
+    max_results: int = 10,
+) -> str:
+    """Semantic widget search across ALL running Qt apps at once.
+
+    Use when you do not know which app has the widget. Each hit names its instance; pass
+    that id as `instance` to qt_screenshot, qt_click, ... together with the ref.
+    """
+    live = await _instances.live()
+    if not live:
+        raise ToolError("No running Qt app with the qtpy-mcp probe was found.")
+    sel = _selector_params(
+        describe, window_title, class_name, object_name, search_fields, min_score, visible_only
+    )
+    sel["max_results"] = max_results
+
+    async def one(info_id: str) -> tuple[str, Any]:
+        try:
+            client = await _instances.client(info_id)
+            return info_id, await asyncio.wait_for(client.call("find_semantic", sel), timeout=15)
+        except (ToolError, TimeoutError) as exc:
+            return info_id, str(exc)
+
+    results = await asyncio.gather(*(one(i.id) for i in live))
+    blocks = []
+    total = 0
+    for info_id, res in results:
+        if isinstance(res, str):
+            blocks.append(f"{info_id}: unreachable ({res})")
+            continue
+        total += int(res.get("count", 0))
+        if res.get("widgets"):
+            blocks.append(_format_widgets(res, header=f"{info_id}: {res['count']} match(es)"))
+    if not blocks or total == 0:
+        return f"No widgets matched in any of {len(live)} running app(s)."
+    return "\n".join(blocks)
 
 
 @mcp.tool()
@@ -293,7 +591,7 @@ async def qt_click(
         position: [x, y] relative to widget top-left. Default: center.
     """
     client = await _ensure_connected(instance)
-    params = {"ref": ref, "button": button}
+    params: dict[str, Any] = {"ref": ref, "button": button}
     if modifiers:
         params["modifiers"] = modifiers
     if position:
@@ -337,7 +635,7 @@ async def qt_key_press(key: str, ref: str | None = None, instance: str | int | N
         ref: Widget ref. If omitted, sends to the currently focused widget.
     """
     client = await _ensure_connected(instance)
-    params = {"key": key}
+    params: dict[str, Any] = {"key": key}
     if ref:
         params["ref"] = ref
     await client.call("key_press", params)
@@ -431,7 +729,7 @@ async def qt_trigger_action(
         raise ToolError("Provide exactly one of action_text or action_index")
 
     client = await _ensure_connected(instance)
-    params = {"ref": ref}
+    params: dict[str, Any] = {"ref": ref}
     if action_text is not None:
         params["action_text"] = action_text
     if action_index is not None:
@@ -461,7 +759,7 @@ async def qt_wait_for(
         value: Expected value (for property_equals).
     """
     client = await _ensure_connected(instance)
-    params = {"condition": condition, "timeout_ms": timeout_ms}
+    params: dict[str, Any] = {"condition": condition, "timeout_ms": timeout_ms}
     if object_name:
         params["object_name"] = object_name
     if ref:
@@ -476,7 +774,7 @@ async def qt_wait_for(
 
 
 @mcp.tool()
-async def qt_batch(steps: list[dict], instance: str | int | None = None) -> str:
+async def qt_batch(steps: list[dict[str, Any]], instance: str | int | None = None) -> str:
     """Execute multiple Qt operations in a single round trip.
 
     Chains clicks, types, key presses, waits, snapshots, and reads into one
@@ -581,7 +879,7 @@ async def qt_batch(steps: list[dict], instance: str | int | None = None) -> str:
 async def qt_list_windows(skip_hidden: bool = True, instance: str | int | None = None) -> str:
     """List all top-level windows and their types."""
     client = await _ensure_connected(instance)
-    params = {}
+    params: dict[str, Any] = {}
     if skip_hidden:
         params["skip_hidden"] = skip_hidden
     result = await client.call("list_windows", params)
@@ -605,7 +903,7 @@ async def qt_object_tree(
         max_depth: Maximum traversal depth.
     """
     client = await _ensure_connected(instance)
-    params = {"max_depth": max_depth}
+    params: dict[str, Any] = {"max_depth": max_depth}
     if root_ref:
         params["root_ref"] = root_ref
     result = await client.call("object_tree", params)
@@ -824,7 +1122,7 @@ async def qt_vtk_scene_info(ref: str, instance: str | int | None = None) -> str:
 
 
 @mcp.tool()
-async def qt_vtk_screenshot(ref: str, instance: str | int | None = None) -> list:
+async def qt_vtk_screenshot(ref: str, instance: str | int | None = None) -> list[Any]:
     """Capture a VTK render window to an image.
 
     Args:
@@ -833,6 +1131,6 @@ async def qt_vtk_screenshot(ref: str, instance: str | int | None = None) -> list
     client = await _ensure_connected(instance)
     result = await client.call("vtk_screenshot", {"ref": ref})
     return [
-        ImageContent(type="image", data=result["image"], mimeType="image/png"),
+        ImageContent(type="image", data=result["image"], mime_type="image/png"),
         TextContent(type="text", text=f"Size: {result['width']}x{result['height']}"),
     ]

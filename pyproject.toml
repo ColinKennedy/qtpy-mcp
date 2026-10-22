@@ -67,6 +67,7 @@ packages = ["src/qtpy_mcp"]
 
 # ---------------------------------------------------------------- ruff
 [tool.ruff]
+extend-exclude = ["stubs"]
 line-length = 100
 target-version = "py310"
 src = ["src", "tests"]
@@ -95,13 +96,37 @@ known-first-party = ["qtpy_mcp"]
 python_version = "3.10"
 strict = true
 files = ["src", "tests"]
+mypy_path = "stubs"
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [[tool.mypy.overrides]]
-# Qt.py and VTK/PyVista ship no type information: everything from them is Any.
-module = ["Qt", "Qt.*", "vtk", "vtk.*", "pyvista", "pyvista.*", "pyvistaqt", "pyvistaqt.*"]
+# VTK/PyVista ship no type information: everything from them is Any.
+# Qt.py has none either, so permissive local stubs live in ./stubs/Qt.
+module = ["vtk", "vtk.*", "vtkmodules", "vtkmodules.*", "pyvista", "pyvista.*", "pyvistaqt", "pyvistaqt.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Tests inherited from upstream qt-mcp, ported to Qt.py but not yet fully annotated.
+# New test modules are held to the full strict settings.
+module = [
+    "tests.conftest", "tests.test_api_inspector", "tests.test_auto_install", "tests.test_batch",
+    "tests.test_interactor", "tests.test_introspector", "tests.test_layout_inspector",
+    "tests.test_qt_messages", "tests.test_qt_shim", "tests.test_ref_registry",
+    "tests.test_rpc_server", "tests.test_scene_inspector", "tests.test_screenshotter",
+    "tests.test_thread_inspector", "tests.test_widget_details_layout", "tests.integration.*", "tests.fixtures.*",
+    "conftest", "test_api_inspector", "test_auto_install", "test_batch", "test_interactor",
+    "test_introspector", "test_layout_inspector", "test_qt_messages", "test_qt_shim",
+    "test_ref_registry", "test_rpc_server", "test_scene_inspector", "test_screenshotter",
+    "test_thread_inspector", "test_widget_details_layout",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_any_generics = false
+warn_return_any = false
+disable_error_code = ["attr-defined", "valid-type", "union-attr", "var-annotated", "no-any-return", "unused-ignore"]
 
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
