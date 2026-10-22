@@ -13,9 +13,15 @@ from pathlib import Path
 def main() -> None:
     title, path = sys.argv[1], Path(sys.argv[2])
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    keep = lines if len(lines) <= 160 else [*lines[:50], "...", *lines[-100:]]
-    body = "\n".join(keep).replace("%", "%25").replace("\r", "").replace("\n", "%0A")
-    print(f"::error title={title}::{body[:60000]}")  # noqa: T201
+    # Annotations are size-limited (a few KB), so drop the noise and keep the failures.
+    interesting = [
+        ln for ln in lines if " PASSED" not in ln and " SKIPPED" not in ln and ln.strip()
+    ]
+    text = "\n".join(interesting)
+    if len(text) > 3500:
+        text = text[:1200] + "\n...\n" + text[-2300:]
+    body = text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+    print(f"::error title={title}::{body}")  # noqa: T201
 
 
 if __name__ == "__main__":

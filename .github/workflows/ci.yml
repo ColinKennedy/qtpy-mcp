@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          uv run pytest -v --tb=short --cov=qtpy_mcp --cov-report=term-missing 2>&1 | tee pytest.out
+          uv run pytest -v --tb=line -rfE --cov=qtpy_mcp --cov-report=term-missing 2>&1 | tee pytest.out
           status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || python3 .github/scripts/annotate.py "pytest ${{ matrix.binding }} ${{ matrix.os }}" pytest.out
           exit "$status"
