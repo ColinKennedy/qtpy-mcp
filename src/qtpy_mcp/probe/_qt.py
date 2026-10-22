@@ -6,7 +6,7 @@ module-level differences (``Signal``/``Slot``, ``QAction`` living in ``QtWidgets
 ``Qt.MouseButton.LeftButton`` style access that also works on Qt5 bindings.
 
 Choose a binding with ``QT_PREFERRED_BINDING`` (Qt.py's own variable) before the first
-import, or via :func:`qtpy_mcp.configure_binding`. Inside a DCC the host's binding is
+import. Inside a DCC the host's binding is
 used automatically.
 
 Usage::

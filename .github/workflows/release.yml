@@ -1,0 +1,116 @@
+name: Release
+
+# Push a tag like v0.2.0 and this publishes qtpy-mcp 0.2.0 to PyPI.
+#
+#   1. bump __version__ in src/qtpy_mcp/__init__.py and add a CHANGELOG section
+#   2. git commit, then: git tag v0.2.0 && git push origin main v0.2.0
+#
+# One-time setup (no API token is stored anywhere): on PyPI add a "trusted publisher" for
+# this repository: workflow `release.yml`, environment `pypi`. See CONTRIBUTING.md.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tag matches the package version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          tag = os.environ["GITHUB_REF_NAME"]
+          src = open("src/qtpy_mcp/__init__.py", encoding="utf-8").read()
+          version = re.search(r'^__version__\s*=\s*"([^"]+)"', src, re.M).group(1)
+          if tag != f"v{version}":
+              sys.exit(f"Tag {tag} does not match __version__ {version!r}; bump the version first.")
+          changelog = open("CHANGELOG.md", encoding="utf-8").read()
+          if f"## [{version}]" not in changelog:
+              sys.exit(f"CHANGELOG.md has no '## [{version}]' section.")
+          pre = "true" if re.search(r"(a|b|rc|dev)\d*$", version) else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={version}\nprerelease={pre}\n")
+          print("releasing", version, "prerelease" if pre == "true" else "")
+          PY
+
+  ci:
+    name: CI
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build distributions
+    needs: [verify, ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - name: Filenames carry the verified version
+        run: |
+          ls dist
+          test -n "$(ls dist/qtpy_mcp-${{ needs.verify.outputs.version }}*.whl)"
+          test -n "$(ls dist/qtpy_mcp-${{ needs.verify.outputs.version }}*.tar.gz)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/qtpy-mcp/${{ needs.verify.outputs.version }}/
+    permissions:
+      id-token: write  # trusted publishing (OIDC); no stored token
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: GitHub release
+    needs: [verify, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist/
+      - name: Extract release notes from CHANGELOG
+        run: |
+          python - <<'PY'
+          import os, re
+          version = os.environ["VERSION"]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          open("notes.md", "w", encoding="utf-8").write((m.group(1) if m else "").strip() + "\n")
+          PY
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          flags=""
+          [ "$PRERELEASE" = "true" ] && flags="--prerelease"
+          gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md $flags

@@ -4,45 +4,152 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call: {}
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  # Debian/Ubuntu runners need these for Qt's offscreen platform plugin.
+  QT_APT_PACKAGES: libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0
+
 jobs:
   lint:
-    name: Lint
+    name: Lint & types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Install dependencies
-        run: uv sync --extra dev
-      - name: Ruff
-        run: uv run ruff check src tests
+      - name: Install
+        run: uv sync --group dev --python 3.12
+      - name: Ruff (lint)
+        run: uv run ruff check .
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+      - name: mypy --strict
+        run: uv run mypy
 
-  test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+  unit:
+    name: Unit (no Qt) · py${{ matrix.python-version }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
-    env:
-      QT_QPA_PLATFORM: offscreen
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Install dependencies
-        run: uv sync --extra dev
-      - name: Pytest
-        run: uv run pytest -v
+      - name: Install (no Qt binding)
+        run: uv sync --group dev --python ${{ matrix.python-version }}
+      - name: Routing, registry, GIF encoding with fake probes
+        run: >
+          uv run pytest -v
+          tests/test_registry.py tests/test_instances.py
+          tests/test_semantic_tools.py tests/test_gif_encode.py
+
+  qt:
+    name: Qt · ${{ matrix.binding }} · py${{ matrix.python-version }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python-version: "3.10", binding: pyside6, extra: pyside6 }
+          - { os: ubuntu-latest, python-version: "3.12", binding: pyside6, extra: pyside6 }
+          - { os: ubuntu-latest, python-version: "3.13", binding: pyside6, extra: pyside6 }
+          - { os: ubuntu-latest, python-version: "3.12", binding: pyqt6, extra: pyqt6 }
+          - { os: ubuntu-latest, python-version: "3.12", binding: pyqt5, extra: pyqt5 }
+          - { os: windows-latest, python-version: "3.12", binding: pyside6, extra: pyside6 }
+          - { os: windows-latest, python-version: "3.12", binding: pyqt6, extra: pyqt6 }
+          - { os: macos-latest, python-version: "3.12", binding: pyside6, extra: pyside6 }
+          # PySide2 only ships wheels for old Pythons; it is what some DCCs still embed.
+          - { os: ubuntu-latest, python-version: "3.10", binding: pyside2, extra: pyside2, experimental: true }
+    env:
+      QT_PREFERRED_BINDING: ${{ matrix.binding == 'pyside6' && 'PySide6' || matrix.binding == 'pyqt6' && 'PyQt6' || matrix.binding == 'pyqt5' && 'PyQt5' || 'PySide2' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries for Qt
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $QT_APT_PACKAGES
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install with ${{ matrix.binding }}
+        run: uv sync --group dev --extra ${{ matrix.extra }} --python ${{ matrix.python-version }}
+      - name: Show the binding Qt.py selected
+        run: uv run python -c "import Qt; print(Qt.__binding__, Qt.__binding_version__, Qt.__qt_version__)"
+      - name: Full test suite (real Qt, GIF recording, multi-process routing)
+        run: uv run pytest -v --cov=qtpy_mcp --cov-report=term-missing
+
+  blender:
+    name: Blender smoke test (in-process probe)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # depends on the Blender download; informational
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 xvfb
+      - name: Install Blender
+        run: sudo snap install blender --classic
+      - name: Install qtpy-mcp into Blender's Python (no deps beyond Qt.py)
+        run: |
+          BPY=$(blender -b --python-expr "import sys;print('PY='+sys.executable)" | sed -n 's/^PY=//p')
+          "$BPY" -m ensurepip
+          "$BPY" -m pip install "Qt.py>=2.0" PySide6-Essentials
+          "$BPY" -m pip install --no-deps .
+      - name: Probe starts inside Blender and answers
+        run: xvfb-run -a blender -b --python examples/blender/smoke_test.py
+
+  build:
+    name: Build & check distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Twine check
+        run: uvx twine check --strict dist/*
+      - name: Wheel contents
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          assert "qtpy_mcp_probe.pth" in names, "probe .pth missing from wheel"
+          assert any(n.endswith("qtpy_mcp/server/__main__.py") for n in names)
+          assert any(n.endswith("qtpy_mcp/py.typed") for n in names), "py.typed missing"
+          print("\n".join(sorted(names)))
+          PY
+      - name: Install the wheel into a clean venv and run the entry point
+        run: |
+          uv venv /tmp/clean
+          uv pip install --python /tmp/clean/bin/python dist/*.whl
+          /tmp/clean/bin/qtpy-mcp --version
+          /tmp/clean/bin/python -c "import qtpy_mcp.server.mcp_server"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  all-green:
+    name: CI passed
+    if: always()
+    needs: [lint, unit, qt, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job failed
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if echo '${{ toJSON(needs) }}' | grep -E '"result": "(failure|cancelled)"'; then exit 1; fi

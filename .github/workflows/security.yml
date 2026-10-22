@@ -32,6 +32,6 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --group dev
       - name: Audit dependencies
         run: uv run pip-audit --progress-spinner off
