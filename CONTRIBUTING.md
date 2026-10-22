@@ -57,7 +57,7 @@ add a *pending trusted publisher*:
 |---|---|
 | PyPI project name | `qtpy-mcp` |
 | Owner / repository | this GitHub repository |
-| Workflow name | `release.yml` |
+| Workflow name | `pypi.yml` |
 | Environment name | `pypi` |
 
 Then create a GitHub environment named `pypi` (Settings → Environments); adding required

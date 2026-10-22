@@ -11,6 +11,17 @@ QObject = QtCore.QObject
 QMetaMethod = QtCore.QMetaMethod
 
 
+def _receiver_count(obj: Any, name: str, signature: str) -> int:
+    """Number of receivers of a signal. PySide takes the SIGNAL() string, PyQt a bound signal."""
+    try:
+        return int(obj.receivers(f"2{signature}"))  # SIGNAL() macro prefix
+    except TypeError:
+        try:
+            return int(obj.receivers(getattr(obj, name)))
+        except (TypeError, AttributeError):
+            return 0
+
+
 class ApiInspector:
     """Inspects signal connections on live QObjects."""
 
@@ -35,7 +46,7 @@ class ApiInspector:
             name = method.name().data().decode()
 
             connected = obj.isSignalConnected(method)
-            receiver_count = obj.receivers(f"2{signature}")  # SIGNAL() macro prefix
+            receiver_count = _receiver_count(obj, name, signature)
 
             result_signals.append(
                 {

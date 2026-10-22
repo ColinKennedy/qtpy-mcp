@@ -1,4 +1,4 @@
-name: Release
+name: PyPI
 
 # Push a tag like v0.2.0 and this publishes qtpy-mcp 0.2.0 to PyPI.
 #
@@ -6,11 +6,11 @@ name: Release
 #   2. git commit, then: git tag v0.2.0 && git push origin main v0.2.0
 #
 # One-time setup (no API token is stored anywhere): on PyPI add a "trusted publisher" for
-# this repository: workflow `release.yml`, environment `pypi`. See CONTRIBUTING.md.
+# this repository: workflow `pypi.yml`, environment `pypi`. See CONTRIBUTING.md.
 
 on:
   push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+    tags: ["v*"]
 
 permissions:
   contents: read

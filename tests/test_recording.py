@@ -38,7 +38,6 @@ def animated(qapp: Any) -> Iterator[Any]:
     timer = QtCore.QTimer()
     timer.timeout.connect(step)
     timer.start(30)
-    label._test_timer = timer  # keep alive
     qapp.processEvents()
     yield label
     timer.stop()
@@ -83,7 +82,9 @@ def test_record_a_widget_and_encode_a_real_gif(qapp: Any, animated: Any) -> None
     assert encoded.data[:3] == b"GIF"
     gif = read_gif(encoded.data)
     assert gif.is_animated
-    assert gif.n_frames == len(frames)
+    # Pillow merges identical neighbouring frames (summing their durations).
+    assert 2 <= gif.n_frames <= len(frames)
+    assert sum(gif.durations) >= 50 * gif.n_frames
     assert gif.size == (160, 90)
     assert gif.loop == 0
     assert len(set(gif.frames)) >= 2, "all frames identical: nothing was animating"
