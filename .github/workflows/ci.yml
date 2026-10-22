@@ -36,6 +36,7 @@ jobs:
       - name: mypy --strict
         shell: bash
         run: |
+          set +e
           uv run mypy 2>&1 | tee mypy.out; status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || python3 .github/scripts/annotate.py "mypy" mypy.out
           exit "$status"
@@ -96,6 +97,7 @@ jobs:
       - name: Full test suite (real Qt, GIF recording, multi-process routing)
         shell: bash
         run: |
+          set +e
           uv run pytest -v --tb=short --cov=qtpy_mcp --cov-report=term-missing 2>&1 | tee pytest.out
           status=${PIPESTATUS[0]}
           [ "$status" -eq 0 ] || python3 .github/scripts/annotate.py "pytest ${{ matrix.binding }} ${{ matrix.os }}" pytest.out
