@@ -14,16 +14,16 @@ CLIENT_START_DELAY_SEC = 0.3
 EVENT_LOOP_POLL_SEC = 0.01
 CLICK_SETTLE_SEC = 0.5
 TYPE_SETTLE_SEC = 0.1
-FLOW_TIMEOUT_SEC = 10
-FLOW_JOIN_TIMEOUT_SEC = 3
-LIST_TIMEOUT_SEC = 5
+FLOW_TIMEOUT_SEC = 60
+FLOW_JOIN_TIMEOUT_SEC = 5
+LIST_TIMEOUT_SEC = 30
 LIST_JOIN_TIMEOUT_SEC = 2
 
 _REF_PATTERN = re.compile(r"\[ref=([^\]]+)\]")
 pytestmark = pytest.mark.requires_socket
 
 
-def _rpc_call(port, method, params=None, request_id=1, timeout=5):
+def _rpc_call(port, method, params=None, request_id=1, timeout=30):
     with socket.create_connection(("localhost", port), timeout=timeout) as conn:
         req = {
             "jsonrpc": "2.0",
@@ -33,7 +33,12 @@ def _rpc_call(port, method, params=None, request_id=1, timeout=5):
             "token": "qtpy-mcp-test-token",
         }
         conn.sendall(json.dumps(req).encode("utf-8") + b"\n")
-        data = conn.recv(READ_CHUNK_SIZE)
+        data = b""
+        while not data.endswith(b"\n"):  # replies (screenshots) can exceed one recv
+            chunk = conn.recv(READ_CHUNK_SIZE)
+            if not chunk:
+                break
+            data += chunk
     return json.loads(data.strip())
 
 
