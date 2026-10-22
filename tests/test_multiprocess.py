@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import io
 import os
+import re
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import anyio
+import anyio.from_thread
 import pytest
 from mcp import Client
 from PIL import Image
@@ -43,11 +45,13 @@ class App:
     color: tuple[int, int, int]
     alt: tuple[int, int, int]
     proc: subprocess.Popen[bytes] | None = None
+    pid_file: Path | None = None
 
     @property
     def pid(self) -> int:
-        assert self.proc is not None
-        return self.proc.pid
+        """The app's own pid, as it registered. Popen.pid can be a launcher shim (Windows)."""
+        assert self.pid_file is not None
+        return int(self.pid_file.read_text(encoding="utf-8"))
 
 
 APPS = [
@@ -66,6 +70,7 @@ def _spawn(app: App, reg_dir: Path) -> None:
     env["QTPY_MCP_REGISTRY_DIR"] = str(reg_dir)
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["PYTHONPATH"] = os.pathsep.join([str(ROOT / "src"), str(ROOT), env.get("PYTHONPATH", "")])
+    app.pid_file = reg_dir.parent / f"{app.name}-{len(app.title)}-{time.monotonic_ns()}.pid"
     app.proc = subprocess.Popen(
         [
             sys.executable,
@@ -78,6 +83,8 @@ def _spawn(app: App, reg_dir: Path) -> None:
             _hex(app.color),
             "--alt-color",
             _hex(app.alt),
+            "--pid-file",
+            str(app.pid_file),
         ],
         env=env,
         stdout=subprocess.DEVNULL,
@@ -87,17 +94,27 @@ def _spawn(app: App, reg_dir: Path) -> None:
 
 def _wait_registered(apps: list[App]) -> None:
     deadline = time.monotonic() + STARTUP_TIMEOUT
-    want = {a.pid for a in apps}
+    want: set[int] = set()
+    have: set[int] = set()
     while time.monotonic() < deadline:
+        want = {
+            a.pid
+            for a in apps
+            if a.pid_file is not None
+            and a.pid_file.exists()
+            and a.pid_file.read_text(encoding="utf-8").strip()
+        }
         have = {i.pid for i in registry.list_instances()}
-        if want <= have:
+        if len(want) == len(apps) and want <= have:
             return
         for a in apps:
             if a.proc is not None and a.proc.poll() is not None:
                 err = a.proc.stderr.read().decode() if a.proc.stderr else ""
                 pytest.fail(f"{a.title} exited early ({a.proc.returncode}):\n{err}")
         time.sleep(0.2)
-    pytest.fail(f"apps did not register within {STARTUP_TIMEOUT}s: missing {want - have}")
+    pytest.fail(
+        f"apps did not register within {STARTUP_TIMEOUT}s: started {want}, registered {have}"
+    )
 
 
 @pytest.fixture
@@ -106,13 +123,19 @@ def fleet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[App]
     monkeypatch.setenv(registry.ENV_DIR, str(reg_dir))
     monkeypatch.delenv("QTPY_MCP_PORT", raising=False)
     monkeypatch.setattr(mcp_server, "_instances", InstanceManager())
+    global _portal
     apps = [App(a.name, a.title, a.color, a.alt) for a in APPS]
+    portal_cm = anyio.from_thread.start_blocking_portal()
+    _portal = portal_cm.__enter__()
     try:
         for a in apps:
             _spawn(a, reg_dir)
         _wait_registered(apps)
         yield apps
     finally:
+        _portal.call(mcp_server._instances.aclose)
+        portal_cm.__exit__(None, None, None)
+        _portal = None
         for a in apps:
             if a.proc is not None and a.proc.poll() is None:
                 a.proc.terminate()
@@ -124,12 +147,22 @@ def fleet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[App]
                     a.proc.kill()
 
 
+_portal: Any = None
+
+
 def _drive(tool: str, args: dict[str, Any]) -> Any:
+    """Call a tool the way an agent would. All calls in a test share one event loop.
+
+    The server keeps its probe connections open between calls, and asyncio streams belong
+    to the loop that created them, so a fresh ``anyio.run`` per call would not do.
+    """
+
     async def main() -> Any:
         async with Client(mcp_server.mcp) as client:
             return await client.call_tool(tool, args)
 
-    return anyio.run(main)
+    assert _portal is not None
+    return _portal.call(main)
 
 
 def _text(result: Any) -> str:
@@ -231,7 +264,12 @@ def test_gif_recording_from_the_chosen_process(fleet: list[App]) -> None:
     assert block.mime_type == "image/gif"
     gif = read_gif(base64.b64decode(block.data))
     assert gif.is_animated
-    assert gif.n_frames >= 3
+    # Pillow merges identical neighbouring frames, so judge capture by the reported count
+    # and the GIF by its distinct frames.
+    recorded = re.search(r"(\d+) frame\(s\)", _text(result))
+    assert recorded is not None
+    assert int(recorded.group(1)) >= 3
+    assert gif.n_frames >= 2
     assert len(set(gif.frames)) >= 2  # the dock really changed colour while recording
     first = Image.frombytes("RGB", gif.size, gif.frames[0])
     assert _is_app_colour(first, target)

@@ -8,7 +8,9 @@ timer keeps changing it so that GIF recordings have distinct frames.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from Qt import QtCore, QtWidgets
 
@@ -23,6 +25,7 @@ def main() -> int:
     parser.add_argument("--dock", default="Foo bar")
     parser.add_argument("--color", required=True, help="dock background, #rrggbb")
     parser.add_argument("--alt-color", required=True)
+    parser.add_argument("--pid-file", required=True, help="written with this process's real pid")
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([*sys.argv[:1], "-platform", "offscreen"])
@@ -43,11 +46,14 @@ def main() -> int:
     window.addDockWidget(scoped(QtCore.Qt).DockWidgetArea.RightDockWidgetArea, dock)
     window.show()
 
-    state = {"flip": False}
+    state = {"tick": 0}
 
     def paint() -> None:
-        state["flip"] = not state["flip"]
-        colour = args.alt_color if state["flip"] else args.color
+        # Alternate in an irregular pattern so a recorder sampling at a fixed rate cannot
+        # stay in step with it and see one colour only.
+        state["tick"] += 1
+        flip = bin(state["tick"]).count("1") % 2 == 1
+        colour = args.alt_color if flip else args.color
         body.setStyleSheet(f"background-color: {colour};")
 
     paint()
@@ -55,6 +61,8 @@ def main() -> int:
     timer.timeout.connect(paint)
     timer.start(40)
 
+    # On Windows a venv python.exe is a launcher, so the parent's Popen.pid is not ours.
+    Path(args.pid_file).write_text(str(os.getpid()), encoding="utf-8")
     install(name=args.name)
     return int(app.exec() if hasattr(app, "exec") else app.exec_())
 

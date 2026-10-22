@@ -249,8 +249,21 @@ class Interactor:
         if not isinstance(obj, QObject):
             raise ValueError(f"Ref {ref} is not a QObject")
 
+        if args and Q_ARG is None:
+            # PySide2 has no Q_ARG: call the Python-visible method directly instead.
+            method = getattr(obj, method_name, None)
+            if not callable(method):
+                raise ValueError(f"{type(obj).__name__} has no callable {method_name!r}")
+            method(*args)
+            QApplication.processEvents()
+            return {"ok": True}
+
         qt_args = [Q_ARG(type(value), value) for value in (args or [])]
-        ok = QMetaObject.invokeMethod(obj, method_name, *qt_args)
+        # The explicit connection type is required by PyQt (PySide accepts it too).
+        direct = scoped(QtCore.Qt).ConnectionType.DirectConnection
+        # PySide returns a success bool; PyQt returns the slot's own return value (None for
+        # void slots) and raises when the method cannot be found.
+        ok = QMetaObject.invokeMethod(obj, method_name, direct, *qt_args) is not False
         QApplication.processEvents()
         return {"ok": ok}
 
