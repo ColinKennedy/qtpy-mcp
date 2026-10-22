@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtWidgets
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtWidgets
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 QApplication = QtWidgets.QApplication
 QWidget = QtWidgets.QWidget

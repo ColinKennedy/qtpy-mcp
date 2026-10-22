@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from qt_mcp.probe.rpc_server import ERROR_INVALID_REQUEST
+from qtpy_mcp.probe.rpc_server import ERROR_INVALID_REQUEST
 
 READ_BUFFER_SIZE = 4096
 pytestmark = pytest.mark.requires_socket
@@ -38,7 +38,7 @@ def _send_raw(port, payload, timeout=5):
 
 def test_probe_install_and_ping(qapp, sample_window):
     """Install probe and verify ping/pong over JSON-RPC."""
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     probe = install(port=0)  # port=0 lets OS pick a free port
     assert probe is not None
@@ -70,7 +70,7 @@ def test_probe_install_and_ping(qapp, sample_window):
 
 def test_probe_idempotent(qapp, sample_window):
     """Second install() returns the same probe."""
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     p1 = install(port=0)
     p2 = install()
@@ -79,7 +79,7 @@ def test_probe_idempotent(qapp, sample_window):
 
 def test_probe_snapshot_rpc(qapp, sample_window):
     """Probe responds to snapshot request with widget tree."""
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     probe = install(port=0)
     port = probe.port()
@@ -110,7 +110,7 @@ def test_probe_snapshot_rpc(qapp, sample_window):
 
 def test_probe_unknown_method(qapp, sample_window):
     """Probe returns error for unknown methods."""
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     probe = install(port=0)
     port = probe.port()
@@ -140,7 +140,7 @@ def test_probe_unknown_method(qapp, sample_window):
 
 def test_probe_invalid_non_object_payload(qapp, sample_window):
     """Probe returns Invalid Request for non-object JSON payload."""
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     probe = install(port=0)
     port = probe.port()

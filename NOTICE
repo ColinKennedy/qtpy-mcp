@@ -1,0 +1,11 @@
+qtpy-mcp
+========
+
+This project began as a fork of qt-mcp by the qt-mcp contributors
+(https://github.com/0xCarbon/qt-mcp), imported at commit
+24303a69d498417dfcec0223bfaa95964f788c17 and used under the terms of its
+"MIT OR Apache-2.0" licence. See LICENSE-MIT and LICENSE-APACHE.
+
+Changes from upstream include: Qt.py instead of a hand-rolled binding shim (adding
+PySide2/PyQt5 support), Python 3.10+, fuzzy semantic widget search, GIF recording,
+strict typing, and a tag-driven PyPI release pipeline.

@@ -3,7 +3,12 @@
 import re
 
 import pytest
-from PySide6.QtWidgets import QLabel, QLineEdit, QTextEdit
+
+from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+QLabel = _QtWidgets.QLabel
+QLineEdit = _QtWidgets.QLineEdit
+QTextEdit = _QtWidgets.QTextEdit
 
 WAIT_TIMEOUT_SHORT_MS = 200
 _REF_PATTERN = re.compile(r"\[ref=([^\]]+)\]")
@@ -50,7 +55,9 @@ def test_type_text_use_clipboard_line_edit(qapp, sample_window, introspector, in
 
 
 def test_type_text_use_clipboard_multiline_text_edit(qapp, sample_window, introspector, interactor):
-    from PySide6.QtWidgets import QTextEdit as _QTE
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    _QTE = _QtWidgets.QTextEdit
 
     text_edit = sample_window.findChild(_QTE, "NotesField")
     if text_edit is None:
@@ -64,7 +71,9 @@ def test_type_text_use_clipboard_multiline_text_edit(qapp, sample_window, intros
 
 def test_type_text_clipboard_restores_previous(qapp, sample_window, introspector, interactor):
     """Clipboard content before the call should be restored after."""
-    from PySide6.QtWidgets import QApplication as _QApp
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    _QApp = _QtWidgets.QApplication
 
     clipboard = _QApp.clipboard()
     clipboard.setText("sentinel")
@@ -182,7 +191,9 @@ def test_get_text_text_edit(qapp, registry, interactor):
 
 
 def test_trigger_action_by_text(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     triggered = []
     menu = QMenu("Test")
@@ -200,7 +211,9 @@ def test_trigger_action_by_text(qapp, registry, interactor):
 
 
 def test_trigger_action_by_index(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     triggered = []
     menu = QMenu("Test")
@@ -217,7 +230,9 @@ def test_trigger_action_by_index(qapp, registry, interactor):
 
 
 def test_trigger_action_ampersand_stripping(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     triggered = []
     menu = QMenu("Test")
@@ -233,7 +248,9 @@ def test_trigger_action_ampersand_stripping(qapp, registry, interactor):
 
 
 def test_trigger_action_disabled(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     menu = QMenu("Test")
     act = menu.addAction("Save")
@@ -248,7 +265,9 @@ def test_trigger_action_disabled(qapp, registry, interactor):
 
 
 def test_trigger_action_not_found(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     menu = QMenu("Test")
     menu.addAction("Open")
@@ -262,7 +281,9 @@ def test_trigger_action_not_found(qapp, registry, interactor):
 
 
 def test_trigger_action_requires_exactly_one_selector(qapp, registry, interactor):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     menu = QMenu("Test")
     menu.addAction("Open")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtCore
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtCore
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 QObject = QtCore.QObject
 QMetaMethod = QtCore.QMetaMethod

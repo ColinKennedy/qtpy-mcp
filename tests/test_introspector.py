@@ -2,7 +2,7 @@
 
 import pytest
 
-from qt_mcp.probe.introspector import MAX_PROPERTY_LENGTH
+from qtpy_mcp.probe.introspector import MAX_PROPERTY_LENGTH
 
 LONG_STYLE_CHARS = MAX_PROPERTY_LENGTH * 40
 MAX_TRUNCATED_STYLE_LEN = MAX_PROPERTY_LENGTH + 100
@@ -137,7 +137,9 @@ def test_list_windows_does_not_invalidate_refs(qapp, sample_window, introspector
 
 
 def test_snapshot_skip_hidden(qapp, sample_window, introspector):
-    from PySide6.QtWidgets import QWidget
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QWidget = _QtWidgets.QWidget
 
     # Hide a panel to test skip_hidden
     left = sample_window.findChild(QWidget, "LeftPanel")
@@ -174,7 +176,9 @@ def test_snapshot_root_ref(qapp, sample_window, introspector, registry):
 
 
 def test_checked_annotation(qapp, introspector):
-    from PySide6.QtWidgets import QPushButton
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QPushButton = _QtWidgets.QPushButton
 
     btn = QPushButton("Toggle")
     btn.setObjectName("TestCheckedBtn")
@@ -197,7 +201,9 @@ def test_active_popup_empty(qapp, sample_window, introspector):
 
 
 def test_menu_items(qapp, sample_window, introspector, registry):
-    from PySide6.QtWidgets import QMenu
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QMenu = _QtWidgets.QMenu
 
     menu = QMenu("TestMenu")
     menu.setObjectName("TestMenu")
@@ -221,7 +227,9 @@ def test_menu_items(qapp, sample_window, introspector, registry):
 
 
 def test_truncate_long_property(qapp, sample_window, introspector, registry):
-    from PySide6.QtWidgets import QWidget
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QWidget = _QtWidgets.QWidget
 
     w = QWidget()
     w.setObjectName("BigStyleWidget")
@@ -240,7 +248,9 @@ def test_truncate_long_property(qapp, sample_window, introspector, registry):
 
 
 def test_list_windows_skip_hidden(qapp, introspector):
-    from PySide6.QtWidgets import QWidget
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QWidget = _QtWidgets.QWidget
 
     w1 = QWidget()
     w1.setObjectName("VisibleWin")
@@ -308,9 +318,7 @@ def test_find_widget_max_results(qapp, sample_window, introspector):
 
 
 def test_find_widget_no_criteria_raises(qapp, sample_window, introspector):
-    import pytest as _pytest
-
-    with _pytest.raises(ValueError, match="At least one"):
+    with pytest.raises(ValueError, match="At least one"):
         introspector.find_widget()
 
 
@@ -321,7 +329,7 @@ def test_find_widget_with_root_ref(qapp, sample_window, introspector):
     import re
 
     # Find root window ref — format is: - QMainWindow "MainWindow" [ref=wN] ...
-    m = re.search(r'- Q?MainWindow\b.*\[ref=(w\d+)\]', tree)
+    m = re.search(r"- Q?MainWindow\b.*\[ref=(w\d+)\]", tree)
     assert m, "MainWindow not in snapshot"
     root_ref = m.group(1)
 
@@ -338,7 +346,9 @@ def test_find_widget_returns_geometry(qapp, sample_window, introspector):
 
 
 def test_find_widget_refs_usable_for_interaction(qapp, sample_window, introspector, interactor):
-    from PySide6.QtWidgets import QLabel
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QLabel = _QtWidgets.QLabel
 
     label = sample_window.findChild(QLabel, "CounterLabel")
     assert label.text() == "Count: 0"

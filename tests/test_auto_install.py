@@ -1,4 +1,4 @@
-"""Tests for the QT_MCP_PROBE=1 auto-hook (subprocess-based)."""
+"""Tests for the QTPY_MCP_PROBE=1 auto-hook (subprocess-based)."""
 
 import subprocess
 import sys
@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from qt_mcp.server.probe_client import DEFAULT_PROBE_PORT
+from qtpy_mcp.server.probe_client import DEFAULT_PROBE_PORT
 
 RUN_TIMEOUT_SECONDS = 15
 pytestmark = pytest.mark.requires_socket
@@ -33,13 +33,14 @@ def test_auto_hook_installs_probe():
         """\
         import sys
         sys.argv = ["test", "-platform", "offscreen"]
-        from PySide6.QtWidgets import QApplication
-        from qt_mcp.probe import PROBE_OBJECT_NAME
+        from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+        QApplication = _QtWidgets.QApplication
+        from qtpy_mcp.probe import PROBE_OBJECT_NAME
         app = QApplication(sys.argv)
         found = any(c.objectName() == PROBE_OBJECT_NAME for c in app.children())
         print(f"probe_found={found}")
         """,
-        env_vars={"QT_MCP_PROBE": "1", "QT_MCP_PORT": "0"},
+        env_vars={"QTPY_MCP_PROBE": "1", "QTPY_MCP_PORT": "0"},
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "probe_found=True" in result.stdout
@@ -50,8 +51,9 @@ def test_auto_hook_noop_without_env():
         """\
         import sys
         sys.argv = ["test", "-platform", "offscreen"]
-        from PySide6.QtWidgets import QApplication
-        from qt_mcp.probe import PROBE_OBJECT_NAME
+        from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+        QApplication = _QtWidgets.QApplication
+        from qtpy_mcp.probe import PROBE_OBJECT_NAME
         app = QApplication(sys.argv)
         found = any(c.objectName() == PROBE_OBJECT_NAME for c in app.children())
         print(f"probe_found={found}")
@@ -66,8 +68,9 @@ def test_auto_hook_custom_port():
         """\
         import sys
         sys.argv = ["test", "-platform", "offscreen"]
-        from PySide6.QtWidgets import QApplication
-        from qt_mcp.probe import Probe
+        from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+        QApplication = _QtWidgets.QApplication
+        from qtpy_mcp.probe import Probe
         app = QApplication(sys.argv)
         probes = [c for c in app.children() if isinstance(c, Probe)]
         if probes:
@@ -75,7 +78,7 @@ def test_auto_hook_custom_port():
         else:
             print("no_probe")
         """,
-        env_vars={"QT_MCP_PROBE": "1", "QT_MCP_PORT": "0"},
+        env_vars={"QTPY_MCP_PROBE": "1", "QTPY_MCP_PORT": "0"},
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "port=" in result.stdout

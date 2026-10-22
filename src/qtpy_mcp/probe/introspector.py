@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtCore, QtWidgets
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtCore, QtWidgets
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 QObject = QtCore.QObject
 QApplication = QtWidgets.QApplication
@@ -61,7 +61,7 @@ def _read_properties(obj: QObject) -> dict[str, Any]:
 
 def _read_tree_widget_items(tree_widget: Any, registry: RefRegistry) -> list[dict]:
     """Extract items from QTreeWidget."""
-    from qt_mcp.probe._qt_compat import QtWidgets as _QtW
+    from qtpy_mcp.probe._qt import QtWidgets as _QtW
 
     QTreeWidget = _QtW.QTreeWidget
     QTreeWidgetItem = _QtW.QTreeWidgetItem
@@ -147,7 +147,7 @@ class Introspector:
 
         # Issue #8: include active popup if not already in top-level widgets
         popup = app.activePopupWidget()
-        if popup and popup.isVisible() and popup not in [w for w in app.topLevelWidgets()]:
+        if popup and popup.isVisible() and popup not in list(app.topLevelWidgets()):
             count += self._walk_widget(popup, 0, max_depth, lines, skip_hidden)
 
         return {
@@ -291,10 +291,14 @@ class Introspector:
                 ok = False
             if ok and text and text_lower not in w_text.lower():
                 ok = False
-            if ok and pattern and not (
-                pattern_lower in w_class.lower()
-                or pattern_lower in w_name.lower()
-                or pattern_lower in w_text.lower()
+            if (
+                ok
+                and pattern
+                and not (
+                    pattern_lower in w_class.lower()
+                    or pattern_lower in w_name.lower()
+                    or pattern_lower in w_text.lower()
+                )
             ):
                 ok = False
 

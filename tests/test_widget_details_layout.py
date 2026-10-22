@@ -1,9 +1,13 @@
 """Tests for the layout fields added to widget_details."""
 
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
 
-from qt_mcp.probe.introspector import Introspector
-from qt_mcp.probe.ref_registry import RefRegistry
+QLabel = _QtWidgets.QLabel
+QVBoxLayout = _QtWidgets.QVBoxLayout
+QWidget = _QtWidgets.QWidget
+
+from qtpy_mcp.probe.introspector import Introspector
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 
 def test_widget_details_has_layout_fields(qapp):
@@ -27,7 +31,7 @@ def test_widget_details_has_layout_fields(qapp):
     assert len(details["size_hint"]) == 2
 
     assert "size_policy" in details
-    assert "x" in details["size_policy"]  # e.g. "Preferred×Preferred"
+    assert "x" in details["size_policy"]  # e.g. "PreferredxPreferred"
 
     assert details["layout"] == "QVBoxLayout"
 

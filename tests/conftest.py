@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for qt-mcp tests."""
+"""Shared pytest fixtures for qtpy-mcp tests."""
 
 from __future__ import annotations
 
@@ -37,15 +37,17 @@ def _skip_requires_socket(request):
 @pytest.fixture(scope="session")
 def qapp():
     """Session-scoped QApplication (one per test run)."""
-    from PySide6.QtWidgets import QApplication
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QApplication = _QtWidgets.QApplication
 
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
-    yield app
+    return app
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_window(qapp):
     """Create a sample app window, clean up after test."""
     from tests.fixtures.sample_app import build_sample_app
@@ -58,36 +60,36 @@ def sample_window(qapp):
     qapp.processEvents()
 
 
-@pytest.fixture()
+@pytest.fixture
 def registry():
-    from qt_mcp.probe.ref_registry import RefRegistry
+    from qtpy_mcp.probe.ref_registry import RefRegistry
 
     return RefRegistry()
 
 
-@pytest.fixture()
+@pytest.fixture
 def introspector(registry):
-    from qt_mcp.probe.introspector import Introspector
+    from qtpy_mcp.probe.introspector import Introspector
 
     return Introspector(registry)
 
 
-@pytest.fixture()
+@pytest.fixture
 def interactor(registry):
-    from qt_mcp.probe.interactor import Interactor
+    from qtpy_mcp.probe.interactor import Interactor
 
     return Interactor(registry)
 
 
-@pytest.fixture()
+@pytest.fixture
 def screenshotter(registry):
-    from qt_mcp.probe.screenshotter import Screenshotter
+    from qtpy_mcp.probe.screenshotter import Screenshotter
 
     return Screenshotter(registry)
 
 
-@pytest.fixture()
+@pytest.fixture
 def scene_inspector(registry):
-    from qt_mcp.probe.scene_inspector import SceneInspector
+    from qtpy_mcp.probe.scene_inspector import SceneInspector
 
     return SceneInspector(registry)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 
 def test_register_and_resolve():

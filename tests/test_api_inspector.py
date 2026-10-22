@@ -2,16 +2,18 @@
 
 import pytest
 
-from qt_mcp.probe.api_inspector import ApiInspector
+from qtpy_mcp.probe.api_inspector import ApiInspector
 
 
-@pytest.fixture()
+@pytest.fixture
 def api_inspector(registry):
     return ApiInspector(registry)
 
 
 def test_signals_on_button(qapp, sample_window, api_inspector, registry):
-    from PySide6.QtWidgets import QPushButton
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QPushButton = _QtWidgets.QPushButton
 
     btn = sample_window.findChild(QPushButton, "IncrementButton")
     assert btn is not None
@@ -32,7 +34,9 @@ def test_signals_on_button(qapp, sample_window, api_inspector, registry):
 
 
 def test_signals_unconnected(qapp, api_inspector, registry):
-    from PySide6.QtWidgets import QPushButton
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QPushButton = _QtWidgets.QPushButton
 
     btn = QPushButton("Lonely")
     btn.setObjectName("LonelyButton")
@@ -45,7 +49,9 @@ def test_signals_unconnected(qapp, api_inspector, registry):
 
 
 def test_signals_after_disconnect(qapp, api_inspector, registry):
-    from PySide6.QtWidgets import QPushButton
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QPushButton = _QtWidgets.QPushButton
 
     btn = QPushButton("Toggle")
     ref = registry.register(btn, prefix="w")
@@ -64,7 +70,9 @@ def test_signals_after_disconnect(qapp, api_inspector, registry):
 
 def test_signals_non_qobject_raises(qapp, api_inspector, registry):
     """Passing a non-QObject ref should raise ValueError."""
-    from PySide6.QtWidgets import QTreeWidgetItem
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QTreeWidgetItem = _QtWidgets.QTreeWidgetItem
 
     item = QTreeWidgetItem(["test"])
     ref = registry.register(item, prefix="i")
@@ -74,7 +82,9 @@ def test_signals_non_qobject_raises(qapp, api_inspector, registry):
 
 def test_signals_lists_all_signals(qapp, api_inspector, registry):
     """A QLineEdit should have textChanged, returnPressed, etc."""
-    from PySide6.QtWidgets import QLineEdit
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QLineEdit = _QtWidgets.QLineEdit
 
     edit = QLineEdit()
     ref = registry.register(edit, prefix="w")

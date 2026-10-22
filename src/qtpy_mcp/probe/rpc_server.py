@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from qt_mcp.probe._qt_compat import QtCore, QtNetwork
+from qtpy_mcp.probe._qt import QtCore, QtNetwork, scoped
 
 QObject = QtCore.QObject
 Slot = QtCore.Slot
@@ -34,12 +35,10 @@ class JsonRpcServer(QObject):
         self._server = QTcpServer(self)
         self._server.newConnection.connect(self._on_connection)
         self._buffers: dict[Any, bytes] = {}
-        self._localhost = QHostAddress.SpecialAddress.LocalHost
+        self._localhost = scoped(QHostAddress).SpecialAddress.LocalHost
 
     def start(self, port: int) -> bool:
-        if not self._server.listen(self._localhost, port):
-            return False
-        return True
+        return bool(self._server.listen(self._localhost, port))
 
     def port(self) -> int:
         return self._server.serverPort()

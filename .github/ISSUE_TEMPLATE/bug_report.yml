@@ -26,5 +26,5 @@ body:
   - type: input
     id: version
     attributes:
-      label: qt-mcp version
+      label: qtpy-mcp version
       placeholder: 0.1.0

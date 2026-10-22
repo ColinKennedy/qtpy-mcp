@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import ImageContent, TextContent
 
-from qt_mcp.server.probe_client import DEFAULT_PROBE_PORT, ProbeClient
+from qtpy_mcp.server.probe_client import DEFAULT_PROBE_PORT, ProbeClient
 
 DEFAULT_SNAPSHOT_DEPTH = 10
 DEFAULT_SCREENSHOT_MAX_WIDTH = 1920
@@ -17,13 +17,13 @@ DEFAULT_JPEG_QUALITY = 80
 DEFAULT_WAIT_TIMEOUT_MS = 5000
 MAX_TEXT_PREVIEW_CHARS = 5000
 
-_HOST = os.getenv("QT_MCP_HOST", "localhost")
-_PORT = int(os.getenv("QT_MCP_PORT", str(DEFAULT_PROBE_PORT)))
+_HOST = os.getenv("QTPY_MCP_HOST", "localhost")
+_PORT = int(os.getenv("QTPY_MCP_PORT", str(DEFAULT_PROBE_PORT)))
 
-mcp = FastMCP(
-    "qt-mcp",
+mcp = MCPServer(
+    "qtpy-mcp",
     instructions=(
-        "Qt/PySide6 desktop application inspection and interaction.\n"
+        "Qt (PySide2/6, PyQt5/6 via Qt.py) desktop application inspection and interaction.\n"
         "- qt_find_widget: search for widgets by class/name/text — prefer this over qt_snapshot "
         "when you know what you're looking for. Returns refs immediately usable with other tools.\n"
         "- qt_snapshot: full widget tree when you need to understand overall structure or discover "
@@ -133,7 +133,7 @@ async def qt_find_widget(
         if not w.get("enabled", True):
             flags.append("disabled")
         flag_str = f" [{', '.join(flags)}]" if flags else ""
-        lines.append(f'  - {w["class"]}{name} [ref={w["ref"]}] {size}{text_val}{flag_str}')
+        lines.append(f"  - {w['class']}{name} [ref={w['ref']}] {size}{text_val}{flag_str}")
     return "\n".join(lines)
 
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtWidgets
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtWidgets
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 QWidget = QtWidgets.QWidget
 
@@ -95,10 +95,11 @@ class VtkInspector:
         # First, try QWidget.grab() which often works
         pixmap = widget.grab()
         if not pixmap.isNull():
-            from qt_mcp.probe._qt_compat import QtCore as _QtC
+            from qtpy_mcp.probe._qt import QtCore as _QtC
+            from qtpy_mcp.probe._qt import scoped
 
             QBuffer = _QtC.QBuffer
-            QIODevice = _QtC.QIODevice
+            QIODevice = scoped(_QtC.QIODevice)
 
             buf = QBuffer()
             buf.open(QIODevice.OpenModeFlag.WriteOnly)

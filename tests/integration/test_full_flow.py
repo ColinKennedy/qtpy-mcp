@@ -46,7 +46,7 @@ class TestFullFlow:
     """Simulate an MCP client: snapshot, click a button, verify the change."""
 
     def test_snapshot_click_verify(self, qapp, sample_window):
-        from qt_mcp.probe import install
+        from qtpy_mcp.probe import install
 
         probe = install(port=0)
         assert probe is not None
@@ -126,7 +126,7 @@ class TestFullFlow:
 
     def test_type_and_read_back(self, qapp, sample_window):
         """Type text into search field and read it back."""
-        from qt_mcp.probe import install
+        from qtpy_mcp.probe import install
 
         probe = install(port=0)
         port = probe.port()
@@ -172,7 +172,7 @@ class TestFullFlow:
 
     def test_list_windows(self, qapp, sample_window):
         """List windows via RPC."""
-        from qt_mcp.probe import install
+        from qtpy_mcp.probe import install
 
         probe = install(port=0)
         port = probe.port()

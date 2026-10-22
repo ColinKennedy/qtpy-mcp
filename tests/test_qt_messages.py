@@ -2,10 +2,10 @@
 
 import pytest
 
-from qt_mcp.probe import Probe
+from qtpy_mcp.probe import Probe
 
 
-@pytest.fixture()
+@pytest.fixture
 def probe(qapp):
     """Create a Probe, yield it, and clean up."""
     p = Probe(qapp, port=0)
@@ -20,7 +20,9 @@ def probe(qapp):
 
 def test_message_capture(qapp, probe):
     """Probe captures Qt messages emitted via qWarning."""
-    from PySide6.QtCore import qWarning
+    from qtpy_mcp.probe._qt import QtCore as _QtCore
+
+    qWarning = _QtCore.qWarning
 
     qWarning("test warning message")
     qapp.processEvents()
@@ -37,7 +39,10 @@ def test_message_capture(qapp, probe):
 
 def test_message_level_filter(qapp, probe):
     """Level filter should exclude lower-severity messages."""
-    from PySide6.QtCore import qDebug, qWarning
+    from qtpy_mcp.probe._qt import QtCore as _QtCore
+
+    qDebug = _QtCore.qDebug
+    qWarning = _QtCore.qWarning
 
     qDebug("debug msg")
     qWarning("warning msg")
@@ -52,9 +57,11 @@ def test_message_level_filter(qapp, probe):
 
 def test_message_buffer_limit(qapp, probe):
     """Buffer should not exceed MESSAGE_BUFFER_MAX."""
-    from PySide6.QtCore import qWarning
+    from qtpy_mcp.probe._qt import QtCore as _QtCore
 
-    from qt_mcp.probe import MESSAGE_BUFFER_MAX
+    qWarning = _QtCore.qWarning
+
+    from qtpy_mcp.probe import MESSAGE_BUFFER_MAX
 
     for i in range(MESSAGE_BUFFER_MAX + 100):
         qWarning(f"msg {i}")
@@ -66,7 +73,9 @@ def test_message_buffer_limit(qapp, probe):
 
 def test_message_via_dispatch(qapp, probe):
     """The qt_messages RPC method should work via dispatch."""
-    from PySide6.QtCore import qWarning
+    from qtpy_mcp.probe._qt import QtCore as _QtCore
+
+    qWarning = _QtCore.qWarning
 
     qWarning("dispatch test")
     qapp.processEvents()

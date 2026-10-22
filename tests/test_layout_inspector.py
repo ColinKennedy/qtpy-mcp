@@ -1,9 +1,13 @@
 """Tests for the LayoutInspector module."""
 
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
 
-from qt_mcp.probe.layout_inspector import LayoutInspector
-from qt_mcp.probe.ref_registry import RefRegistry
+QLabel = _QtWidgets.QLabel
+QVBoxLayout = _QtWidgets.QVBoxLayout
+QWidget = _QtWidgets.QWidget
+
+from qtpy_mcp.probe.layout_inspector import LayoutInspector
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 
 def test_layout_check_basic(qapp, sample_window):

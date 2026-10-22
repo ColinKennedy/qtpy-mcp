@@ -1,8 +1,10 @@
 """Tests for the ThreadInspector module."""
 
-from PySide6.QtCore import QThread
+from qtpy_mcp.probe._qt import QtCore as _QtCore
 
-from qt_mcp.probe.thread_inspector import ThreadInspector
+QThread = _QtCore.QThread
+
+from qtpy_mcp.probe.thread_inspector import ThreadInspector
 
 
 def test_thread_check_basic(qapp, sample_window):

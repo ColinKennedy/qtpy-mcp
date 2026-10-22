@@ -1,31 +1,35 @@
-"""Minimal PySide6 app for testing: representative widget hierarchy."""
+"""Minimal Qt.py app for testing: representative widget hierarchy."""
 
 from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, QThread
-from PySide6.QtWidgets import (
-    QApplication,
-    QFrame,
-    QGraphicsEllipseItem,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsTextItem,
-    QGraphicsView,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QPushButton,
-    QSplitter,
-    QTabWidget,
-    QTextEdit,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from qtpy_mcp.probe._qt import QtCore as _QtCore
+from qtpy_mcp.probe._qt import scoped
+
+Qt = scoped(_QtCore.Qt)
+QThread = _QtCore.QThread
+from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+QApplication = _QtWidgets.QApplication
+QFrame = _QtWidgets.QFrame
+QGraphicsEllipseItem = _QtWidgets.QGraphicsEllipseItem
+QGraphicsRectItem = _QtWidgets.QGraphicsRectItem
+QGraphicsScene = _QtWidgets.QGraphicsScene
+QGraphicsTextItem = _QtWidgets.QGraphicsTextItem
+QGraphicsView = _QtWidgets.QGraphicsView
+QHBoxLayout = _QtWidgets.QHBoxLayout
+QLabel = _QtWidgets.QLabel
+QLineEdit = _QtWidgets.QLineEdit
+QMainWindow = _QtWidgets.QMainWindow
+QPushButton = _QtWidgets.QPushButton
+QSplitter = _QtWidgets.QSplitter
+QTabWidget = _QtWidgets.QTabWidget
+QTextEdit = _QtWidgets.QTextEdit
+QTreeWidget = _QtWidgets.QTreeWidget
+QTreeWidgetItem = _QtWidgets.QTreeWidgetItem
+QVBoxLayout = _QtWidgets.QVBoxLayout
+QWidget = _QtWidgets.QWidget
 
 OFFSCREEN_ARGS = ["-platform", "offscreen"]
 

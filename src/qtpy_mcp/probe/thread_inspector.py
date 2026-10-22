@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtCore, QtWidgets
+from qtpy_mcp.probe._qt import QtCore, QtWidgets
 
 QObject = QtCore.QObject
 QThread = QtCore.QThread

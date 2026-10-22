@@ -5,22 +5,23 @@ from __future__ import annotations
 import base64
 import os
 
-from qt_mcp.probe._qt_compat import QtCore, QtWidgets
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtCore, QtWidgets, scoped
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 QBuffer = QtCore.QBuffer
-QIODevice = QtCore.QIODevice
-Qt = QtCore.Qt
+QIODevice = scoped(QtCore.QIODevice)
+Qt = scoped(QtCore.Qt)
 QApplication = QtWidgets.QApplication
 QWidget = QtWidgets.QWidget
+
 
 def _clamp_env(name: str, default: int, lo: int, hi: int) -> int:
     return max(lo, min(int(os.getenv(name, str(default))), hi))
 
 
-DEFAULT_SCREENSHOT_MAX_WIDTH = _clamp_env("QT_MCP_SCREENSHOT_MAX_WIDTH", 1920, 1, 7680)
-DEFAULT_SCREENSHOT_MAX_HEIGHT = _clamp_env("QT_MCP_SCREENSHOT_MAX_HEIGHT", 1080, 1, 4320)
-DEFAULT_JPEG_QUALITY = _clamp_env("QT_MCP_JPEG_QUALITY", 80, 1, 100)
+DEFAULT_SCREENSHOT_MAX_WIDTH = _clamp_env("QTPY_MCP_SCREENSHOT_MAX_WIDTH", 1920, 1, 7680)
+DEFAULT_SCREENSHOT_MAX_HEIGHT = _clamp_env("QTPY_MCP_SCREENSHOT_MAX_HEIGHT", 1080, 1, 4320)
+DEFAULT_JPEG_QUALITY = _clamp_env("QTPY_MCP_JPEG_QUALITY", 80, 1, 100)
 
 
 class Screenshotter:

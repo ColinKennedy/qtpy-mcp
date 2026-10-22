@@ -5,15 +5,15 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from qt_mcp.probe._qt_compat import QtCore, QtGui, QtWidgets
-from qt_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe._qt import QtCore, QtGui, QtWidgets, scoped
+from qtpy_mcp.probe.ref_registry import RefRegistry
 
 Q_ARG = QtCore.Q_ARG
-QEvent = QtCore.QEvent
+QEvent = scoped(QtCore.QEvent)
 QMetaObject = QtCore.QMetaObject
 QObject = QtCore.QObject
 QPointF = QtCore.QPointF
-Qt = QtCore.Qt
+Qt = scoped(QtCore.Qt)
 QThread = QtCore.QThread
 QKeyEvent = QtGui.QKeyEvent
 QMouseEvent = QtGui.QMouseEvent

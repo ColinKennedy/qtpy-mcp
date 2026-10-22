@@ -1,10 +1,10 @@
 """Tests for the Qt binding compatibility layer."""
 
-from qt_mcp.probe._qt_compat import QT_BINDING, QtCore, QtGui, QtNetwork, QtWidgets
+from qtpy_mcp.probe._qt import QT_BINDING, QtCore, QtGui, QtNetwork, QtWidgets
 
 
 def test_binding_detection():
-    assert QT_BINDING in ("PySide6", "PyQt6")
+    assert QT_BINDING in ("PySide2", "PySide6", "PyQt5", "PyQt6")
 
 
 def test_core_modules_available():
@@ -16,5 +16,5 @@ def test_core_modules_available():
 
 
 def test_qaction_in_qtgui():
-    """QAction lives in QtGui for all Qt6 bindings."""
-    assert hasattr(QtGui, "QAction")
+    """Qt.py exposes QAction from QtWidgets on every binding."""
+    assert hasattr(QtWidgets, "QAction")

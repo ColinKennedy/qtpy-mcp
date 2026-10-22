@@ -1,8 +1,8 @@
-"""qt-mcp probe: in-process instrumentation for Qt/PySide6 applications.
+"""qtpy-mcp probe: in-process instrumentation for Qt/PySide6 applications.
 
 Usage::
 
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
     install()  # or install(port=<custom port>)
 """
 
@@ -11,33 +11,35 @@ from __future__ import annotations
 import collections
 import time
 
-from qt_mcp.probe._qt_compat import QtCore, QtWidgets
-from qt_mcp.probe.api_inspector import ApiInspector
-from qt_mcp.probe.interactor import Interactor
-from qt_mcp.probe.introspector import Introspector
-from qt_mcp.probe.layout_inspector import LayoutInspector
-from qt_mcp.probe.ref_registry import RefRegistry
-from qt_mcp.probe.rpc_server import JsonRpcServer
-from qt_mcp.probe.scene_inspector import SceneInspector
-from qt_mcp.probe.screenshotter import Screenshotter
-from qt_mcp.probe.thread_inspector import ThreadInspector
-from qt_mcp.probe.vtk_inspector import VtkInspector
+from qtpy_mcp.probe._qt import QtCore, QtWidgets, scoped
+from qtpy_mcp.probe.api_inspector import ApiInspector
+from qtpy_mcp.probe.interactor import Interactor
+from qtpy_mcp.probe.introspector import Introspector
+from qtpy_mcp.probe.layout_inspector import LayoutInspector
+from qtpy_mcp.probe.ref_registry import RefRegistry
+from qtpy_mcp.probe.rpc_server import JsonRpcServer
+from qtpy_mcp.probe.scene_inspector import SceneInspector
+from qtpy_mcp.probe.screenshotter import Screenshotter
+from qtpy_mcp.probe.thread_inspector import ThreadInspector
+from qtpy_mcp.probe.vtk_inspector import VtkInspector
 
 QObject = QtCore.QObject
 QThread = QtCore.QThread
 QApplication = QtWidgets.QApplication
 
 DEFAULT_PORT = 9142
-PROBE_OBJECT_NAME = "qt_mcp_probe"
+PROBE_OBJECT_NAME = "qtpy_mcp_probe"
 MESSAGE_BUFFER_MAX = 500
+
+_MsgType = scoped(QtCore).QtMsgType
 
 # Map QtMsgType enum values to string level names
 _MSG_TYPE_MAP = {
-    QtCore.QtMsgType.QtDebugMsg: "debug",
-    QtCore.QtMsgType.QtInfoMsg: "info",
-    QtCore.QtMsgType.QtWarningMsg: "warning",
-    QtCore.QtMsgType.QtCriticalMsg: "critical",
-    QtCore.QtMsgType.QtFatalMsg: "critical",
+    _MsgType.QtDebugMsg: "debug",
+    _MsgType.QtInfoMsg: "info",
+    _MsgType.QtWarningMsg: "warning",
+    _MsgType.QtCriticalMsg: "critical",
+    _MsgType.QtFatalMsg: "critical",
 }
 
 _LEVEL_SEVERITY = {"debug": 0, "info": 1, "warning": 2, "critical": 3}
@@ -219,23 +221,23 @@ def install(port: int = DEFAULT_PORT) -> Probe | None:
 
 
 def _auto_hook() -> None:
-    """If QT_MCP_PROBE=1, patch QApplication to auto-install probe on creation."""
+    """If QTPY_MCP_PROBE=1, patch QApplication to auto-install probe on creation."""
     import os as _os
 
-    if _os.environ.get("QT_MCP_PROBE") != "1":
+    if _os.environ.get("QTPY_MCP_PROBE") != "1":
         return
 
-    hook_flag = "_qt_mcp_probe_hooked"
+    hook_flag = "_qtpy_mcp_probe_hooked"
     if getattr(QApplication, hook_flag, False):
         return
     setattr(QApplication, hook_flag, True)
 
-    default_port = int(_os.environ.get("QT_MCP_PORT", str(DEFAULT_PORT)))
+    default_port = int(_os.environ.get("QTPY_MCP_PORT", str(DEFAULT_PORT)))
     _original_init = QApplication.__init__
 
     def _patched_init(self, *args, **kwargs):
         _original_init(self, *args, **kwargs)
-        port = int(_os.environ.get("QT_MCP_PORT", str(DEFAULT_PORT)))
+        port = int(_os.environ.get("QTPY_MCP_PORT", str(DEFAULT_PORT)))
         install(port=port)
 
     QApplication.__init__ = _patched_init

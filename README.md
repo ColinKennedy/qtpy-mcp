@@ -65,6 +65,7 @@ Add the probe to your PySide6 application:
 
 # Option B: Explicit init
 from qt_mcp.probe import install
+
 install()  # call after QApplication is created
 ```
 

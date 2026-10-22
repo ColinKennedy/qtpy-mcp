@@ -37,7 +37,9 @@ def _run_client(port, fn):
 
     t = threading.Thread(target=_worker)
     t.start()
-    from PySide6.QtWidgets import QApplication
+    from qtpy_mcp.probe._qt import QtWidgets as _QtWidgets
+
+    QApplication = _QtWidgets.QApplication
 
     deadline = time.time() + TIMEOUT_SEC
     app = QApplication.instance()
@@ -52,7 +54,7 @@ def _run_client(port, fn):
 
 
 def _install_and_get_port(qapp):
-    from qt_mcp.probe import install
+    from qtpy_mcp.probe import install
 
     probe = install(port=0)
     assert probe is not None
