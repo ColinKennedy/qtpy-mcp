@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import socket
 import sys
 
 import pytest
+
+# Probes require a token; the raw-socket tests send this one.
+TEST_TOKEN = "qtpy-mcp-test-token"
+os.environ["QTPY_MCP_TOKEN"] = TEST_TOKEN
 
 # Force offscreen before any Qt import
 if "-platform" not in sys.argv:

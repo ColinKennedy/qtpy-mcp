@@ -19,7 +19,13 @@ JOIN_SEC = 3
 
 def _rpc(port, method, params=None, req_id=1):
     with socket.create_connection(("localhost", port), timeout=5) as s:
-        req = {"jsonrpc": "2.0", "method": method, "params": params or {}, "id": req_id}
+        req = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+            "id": req_id,
+            "token": "qtpy-mcp-test-token",
+        }
         s.sendall(json.dumps(req).encode() + b"\n")
         return json.loads(s.recv(65536).strip())
 

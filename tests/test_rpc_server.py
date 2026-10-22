@@ -18,7 +18,13 @@ def _send_rpc(port, method, params=None, request_id=1, timeout=5):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
     s.connect(("localhost", port))
-    req = {"jsonrpc": "2.0", "method": method, "params": params or {}, "id": request_id}
+    req = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params or {},
+        "id": request_id,
+        "token": "qtpy-mcp-test-token",
+    }
     s.sendall(json.dumps(req).encode("utf-8") + b"\n")
     data = s.recv(READ_BUFFER_SIZE)
     s.close()
