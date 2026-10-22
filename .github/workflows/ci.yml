@@ -34,7 +34,11 @@ jobs:
       - name: Ruff (format)
         run: uv run ruff format --check .
       - name: mypy --strict
-        run: uv run mypy
+        shell: bash
+        run: |
+          uv run mypy 2>&1 | tee mypy.out; status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || python3 .github/scripts/annotate.py "mypy" mypy.out
+          exit "$status"
 
   unit:
     name: Unit (no Qt) · py${{ matrix.python-version }} · ${{ matrix.os }}
@@ -90,7 +94,12 @@ jobs:
       - name: Show the binding Qt.py selected
         run: uv run python -c "import Qt; print(Qt.__binding__, Qt.__binding_version__, Qt.__qt_version__)"
       - name: Full test suite (real Qt, GIF recording, multi-process routing)
-        run: uv run pytest -v --cov=qtpy_mcp --cov-report=term-missing
+        shell: bash
+        run: |
+          uv run pytest -v --tb=short --cov=qtpy_mcp --cov-report=term-missing 2>&1 | tee pytest.out
+          status=${PIPESTATUS[0]}
+          [ "$status" -eq 0 ] || python3 .github/scripts/annotate.py "pytest ${{ matrix.binding }} ${{ matrix.os }}" pytest.out
+          exit "$status"
 
   blender:
     name: Blender smoke test (in-process probe)
