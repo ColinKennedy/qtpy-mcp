@@ -25,7 +25,13 @@ pytestmark = pytest.mark.requires_socket
 
 def _rpc_call(port, method, params=None, request_id=1, timeout=5):
     with socket.create_connection(("localhost", port), timeout=timeout) as conn:
-        req = {"jsonrpc": "2.0", "method": method, "params": params or {}, "id": request_id}
+        req = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+            "id": request_id,
+            "token": "qtpy-mcp-test-token",
+        }
         conn.sendall(json.dumps(req).encode("utf-8") + b"\n")
         data = conn.recv(READ_CHUNK_SIZE)
     return json.loads(data.strip())

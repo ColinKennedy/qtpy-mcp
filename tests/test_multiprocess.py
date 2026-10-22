@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import anyio
+import anyio.from_thread
 import pytest
 from mcp import Client
 from PIL import Image
@@ -106,13 +107,19 @@ def fleet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[App]
     monkeypatch.setenv(registry.ENV_DIR, str(reg_dir))
     monkeypatch.delenv("QTPY_MCP_PORT", raising=False)
     monkeypatch.setattr(mcp_server, "_instances", InstanceManager())
+    global _portal
     apps = [App(a.name, a.title, a.color, a.alt) for a in APPS]
+    portal_cm = anyio.from_thread.start_blocking_portal()
+    _portal = portal_cm.__enter__()
     try:
         for a in apps:
             _spawn(a, reg_dir)
         _wait_registered(apps)
         yield apps
     finally:
+        _portal.call(mcp_server._instances.aclose)
+        portal_cm.__exit__(None, None, None)
+        _portal = None
         for a in apps:
             if a.proc is not None and a.proc.poll() is None:
                 a.proc.terminate()
@@ -124,12 +131,22 @@ def fleet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[App]
                     a.proc.kill()
 
 
+_portal: Any = None
+
+
 def _drive(tool: str, args: dict[str, Any]) -> Any:
+    """Call a tool the way an agent would. All calls in a test share one event loop.
+
+    The server keeps its probe connections open between calls, and asyncio streams belong
+    to the loop that created them, so a fresh ``anyio.run`` per call would not do.
+    """
+
     async def main() -> Any:
         async with Client(mcp_server.mcp) as client:
             return await client.call_tool(tool, args)
 
-    return anyio.run(main)
+    assert _portal is not None
+    return _portal.call(main)
 
 
 def _text(result: Any) -> str:

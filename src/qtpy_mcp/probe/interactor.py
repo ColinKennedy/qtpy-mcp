@@ -250,7 +250,9 @@ class Interactor:
             raise ValueError(f"Ref {ref} is not a QObject")
 
         qt_args = [Q_ARG(type(value), value) for value in (args or [])]
-        ok = QMetaObject.invokeMethod(obj, method_name, *qt_args)
+        # The explicit connection type is required by PyQt (PySide accepts it too).
+        direct = scoped(QtCore.Qt).ConnectionType.DirectConnection
+        ok = QMetaObject.invokeMethod(obj, method_name, direct, *qt_args)
         QApplication.processEvents()
         return {"ok": ok}
 
