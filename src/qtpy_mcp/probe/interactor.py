@@ -5,10 +5,9 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
-from qtpy_mcp.probe._qt import QtCore, QtGui, QtWidgets, scoped
+from qtpy_mcp.probe._qt import Q_ARG, QtCore, QtGui, QtWidgets, scoped
 from qtpy_mcp.probe.ref_registry import RefRegistry
 
-Q_ARG = QtCore.Q_ARG
 QEvent = scoped(QtCore.QEvent)
 QMetaObject = QtCore.QMetaObject
 QObject = QtCore.QObject

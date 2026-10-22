@@ -38,7 +38,6 @@ def animated(qapp: Any) -> Iterator[Any]:
     timer = QtCore.QTimer()
     timer.timeout.connect(step)
     timer.start(30)
-    label._test_timer = timer  # keep alive
     qapp.processEvents()
     yield label
     timer.stop()

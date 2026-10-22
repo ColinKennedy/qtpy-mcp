@@ -16,6 +16,7 @@ Usage::
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 import Qt
@@ -23,14 +24,27 @@ from Qt import QtCore, QtGui, QtNetwork, QtWidgets
 
 __all__ = [
     "QT_BINDING",
+    "Q_ARG",
     "QtCore",
     "QtGui",
     "QtNetwork",
     "QtWidgets",
+    "native",
     "scoped",
 ]
 
 QT_BINDING: str = str(Qt.__binding__)
+
+
+def native(module: str) -> Any:
+    """The selected binding's own module (``native("QtCore")``).
+
+    Qt.py does not re-export everything (``Q_ARG`` is one example); this reaches past it.
+    """
+    return importlib.import_module(f"{QT_BINDING}.{module}")
+
+
+Q_ARG: Any = native("QtCore").Q_ARG
 
 
 class _Scope:
