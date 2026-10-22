@@ -6,6 +6,7 @@ import os
 import socket
 import stat
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -70,12 +71,23 @@ def test_many_instances_listed_oldest_first(listener: socket.socket) -> None:
     assert [i.name for i in registry.list_instances()] == ["blender", "maya", "houdini"]
 
 
-def test_dead_port_is_pruned(listener: socket.socket) -> None:
+def test_long_unreachable_entry_is_pruned(listener: socket.socket) -> None:
     port = listener.getsockname()[1]
-    registry.register(_info("gone", port))
+    info = _info("gone", port)
+    info.started_at = time.time() - registry.STALE_AFTER_SECONDS - 10
+    registry.register(info)
     listener.close()
     assert registry.list_instances() == []
     assert list(registry.registry_dir().glob("*.json")) == []
+
+
+def test_recent_unreachable_entry_is_hidden_but_kept(listener: socket.socket) -> None:
+    """A busy app that is slow to accept must not be forgotten for good."""
+    port = listener.getsockname()[1]
+    registry.register(_info("busy", port))
+    listener.close()
+    assert registry.list_instances() == []
+    assert len(list(registry.registry_dir().glob("*.json"))) == 1
 
 
 def test_dead_pid_is_pruned(listener: socket.socket) -> None:

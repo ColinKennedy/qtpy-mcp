@@ -46,11 +46,14 @@ def main() -> int:
     window.addDockWidget(scoped(QtCore.Qt).DockWidgetArea.RightDockWidgetArea, dock)
     window.show()
 
-    state = {"flip": False}
+    state = {"tick": 0}
 
     def paint() -> None:
-        state["flip"] = not state["flip"]
-        colour = args.alt_color if state["flip"] else args.color
+        # Alternate in an irregular pattern so a recorder sampling at a fixed rate cannot
+        # stay in step with it and see one colour only.
+        state["tick"] += 1
+        flip = bin(state["tick"]).count("1") % 2 == 1
+        colour = args.alt_color if flip else args.color
         body.setStyleSheet(f"background-color: {colour};")
 
     paint()
