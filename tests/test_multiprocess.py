@@ -44,11 +44,13 @@ class App:
     color: tuple[int, int, int]
     alt: tuple[int, int, int]
     proc: subprocess.Popen[bytes] | None = None
+    pid_file: Path | None = None
 
     @property
     def pid(self) -> int:
-        assert self.proc is not None
-        return self.proc.pid
+        """The app's own pid, as it registered. Popen.pid can be a launcher shim (Windows)."""
+        assert self.pid_file is not None
+        return int(self.pid_file.read_text(encoding="utf-8"))
 
 
 APPS = [
@@ -67,6 +69,7 @@ def _spawn(app: App, reg_dir: Path) -> None:
     env["QTPY_MCP_REGISTRY_DIR"] = str(reg_dir)
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["PYTHONPATH"] = os.pathsep.join([str(ROOT / "src"), str(ROOT), env.get("PYTHONPATH", "")])
+    app.pid_file = reg_dir.parent / f"{app.name}-{len(app.title)}-{time.monotonic_ns()}.pid"
     app.proc = subprocess.Popen(
         [
             sys.executable,
@@ -79,6 +82,8 @@ def _spawn(app: App, reg_dir: Path) -> None:
             _hex(app.color),
             "--alt-color",
             _hex(app.alt),
+            "--pid-file",
+            str(app.pid_file),
         ],
         env=env,
         stdout=subprocess.DEVNULL,
@@ -88,17 +93,27 @@ def _spawn(app: App, reg_dir: Path) -> None:
 
 def _wait_registered(apps: list[App]) -> None:
     deadline = time.monotonic() + STARTUP_TIMEOUT
-    want = {a.pid for a in apps}
+    want: set[int] = set()
+    have: set[int] = set()
     while time.monotonic() < deadline:
+        want = {
+            a.pid
+            for a in apps
+            if a.pid_file is not None
+            and a.pid_file.exists()
+            and a.pid_file.read_text(encoding="utf-8").strip()
+        }
         have = {i.pid for i in registry.list_instances()}
-        if want <= have:
+        if len(want) == len(apps) and want <= have:
             return
         for a in apps:
             if a.proc is not None and a.proc.poll() is not None:
                 err = a.proc.stderr.read().decode() if a.proc.stderr else ""
                 pytest.fail(f"{a.title} exited early ({a.proc.returncode}):\n{err}")
         time.sleep(0.2)
-    pytest.fail(f"apps did not register within {STARTUP_TIMEOUT}s: missing {want - have}")
+    pytest.fail(
+        f"apps did not register within {STARTUP_TIMEOUT}s: started {want}, registered {have}"
+    )
 
 
 @pytest.fixture

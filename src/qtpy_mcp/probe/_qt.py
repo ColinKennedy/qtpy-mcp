@@ -44,7 +44,8 @@ def native(module: str) -> Any:
     return importlib.import_module(f"{QT_BINDING}.{module}")
 
 
-Q_ARG: Any = native("QtCore").Q_ARG
+# PySide2 does not provide Q_ARG; callers fall back to calling the method directly.
+Q_ARG: Any = getattr(native("QtCore"), "Q_ARG", None)
 
 
 class _Scope:
