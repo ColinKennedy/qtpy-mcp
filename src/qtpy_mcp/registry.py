@@ -143,7 +143,10 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
-def port_open(host: str, port: int, timeout: float = 0.25) -> bool:
+STALE_AFTER_SECONDS = 300.0
+
+
+def port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Whether something accepts TCP connections on ``host:port``."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -160,9 +163,16 @@ def list_instances(*, prune: bool = True) -> list[InstanceInfo]:
             info = InstanceInfo.from_dict(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError):
             continue  # half-written or foreign file: leave it alone
-        if pid_alive(info.pid) and port_open(info.host, info.port):
+        if not pid_alive(info.pid):
+            if prune:
+                with contextlib.suppress(OSError):
+                    path.unlink()
+        elif port_open(info.host, info.port):
             found.append(info)
-        elif prune:
+        elif prune and time.time() - info.started_at > STALE_AFTER_SECONDS:
+            # Alive process but nothing listening for a long time: a recycled pid, or a probe
+            # that shut down. A recent entry is only skipped, never deleted: a busy app (a
+            # DCC in the middle of a long cook, say) may just be slow to accept this once.
             with contextlib.suppress(OSError):
                 path.unlink()
     found.sort(key=lambda i: i.started_at)

@@ -26,6 +26,32 @@ def _truncate(val: str, limit: int = MAX_PROPERTY_LENGTH) -> str:
     return val
 
 
+_SIZE_POLICIES = (
+    "Fixed",
+    "Minimum",
+    "Maximum",
+    "Preferred",
+    "Expanding",
+    "MinimumExpanding",
+    "Ignored",
+)
+
+
+def _policy_name(policy: Any) -> str:
+    """Name of a QSizePolicy.Policy value (PyQt5 enums are plain ints without ``.name``)."""
+    name = getattr(policy, "name", None)
+    if isinstance(name, bytes):
+        return name.decode()
+    if isinstance(name, str):
+        return name
+    holder = QtWidgets.QSizePolicy
+    scope = getattr(holder, "Policy", holder)
+    for candidate in _SIZE_POLICIES:
+        if getattr(scope, candidate, None) == policy:
+            return candidate
+    return str(policy)
+
+
 def _safe_text(obj: Any) -> str | None:
     """Try to read .text() from widget, return None on failure."""
     if not hasattr(obj, "text"):
@@ -190,12 +216,8 @@ class Introspector:
                 pass
             try:
                 sp = obj.sizePolicy()
-                h_name = sp.horizontalPolicy().name
-                v_name = sp.verticalPolicy().name
-                if isinstance(h_name, bytes):
-                    h_name = h_name.decode()
-                if isinstance(v_name, bytes):
-                    v_name = v_name.decode()
+                h_name = _policy_name(sp.horizontalPolicy())
+                v_name = _policy_name(sp.verticalPolicy())
                 result["size_policy"] = f"{h_name}x{v_name}"
             except (RuntimeError, AttributeError):
                 pass
