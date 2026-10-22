@@ -112,7 +112,7 @@ def test_find_by_placeholder_and_object_name(ui: dict[str, Any]) -> None:
 
 def test_find_by_stylesheet(ui: dict[str, Any]) -> None:
     finder, reg = _finder()
-    hits = finder.find(describe="#ff6600", search_fields=["style_sheet"])["widgets"]
+    hits = finder.find(describe="#ff6600", search_fields=["style_sheet"], min_score=0.2)["widgets"]
     assert hits
     assert reg.resolve_or_raise(hits[0]["ref"]) is ui["button"]
 
